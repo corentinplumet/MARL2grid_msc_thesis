@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: marl2grid
+Version: 0.1.0
+Summary: A torch modular MARL library for power grids
+Home-page: 
+Author: 
+Author-email: 
+Classifier: Development Status :: 1 - Beta
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.12.2
+Requires-Dist: lightsim2grid==0.9
+Dynamic: classifier
+Dynamic: requires-dist
+Dynamic: summary
