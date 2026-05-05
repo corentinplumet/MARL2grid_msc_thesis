@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --mail-user=corentin.plumet@epfl.ch
-#SBATCH --output=/home/plumet/msc_thesis/run_jobs/job_out_%j.log
-#SBATCH --error=/home/plumet/msc_thesis/run_jobs/job_err_%j.log
-#SBATCH --chdir=/home/plumet/msc_thesis
+#SBATCH --output=/home/plumet/MARL2grid_msc_thesis/run_jobs/job_out_%j.log
+#SBATCH --error=/home/plumet/MARL2grid_msc_thesis/run_jobs/job_err_%j.log
+#SBATCH --chdir=/home/plumet/MARL2grid_msc_thesis
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --mem=16G
@@ -13,10 +13,10 @@
 
 
 # Activate environment
-source /home/plumet/msc_thesis/.venv/bin/activate
+source /home/plumet/MARL2grid_msc_thesis/.venv/bin/activate
 
 # === Base paths ===
-BASE_DIR=/home/plumet/msc_thesis/src/RL
+BASE_DIR=/home/plumet/MARL2grid_msc_thesis/src/RL
 EXPERIMENT_CONFIG_DIR=$BASE_DIR/configs/experiments
 EVAL_CONFIG_DIR=$BASE_DIR/configs/eval
 

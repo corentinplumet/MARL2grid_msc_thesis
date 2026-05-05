@@ -1,21 +1,59 @@
 import os
 import re
 import json
+import sys
+import types
 from collections import defaultdict
 from packaging import version
 
+import gymnasium as gym
 from gymnasium.spaces import Discrete, Box
 
 import grid2op
 from grid2op.Chronics import MultifolderWithCache, Multifolder
 from grid2op.gym_compat import GymEnv, BoxGymObsSpace, DiscreteActSpace # if we import gymnasium, GymEnv will convert to Gymnasium!   
-from grid2op.multi_agent import MultiAgentEnv
 from grid2op.Reward import CombinedReward
 from lightsim2grid import LightSimBackend
-from ray.rllib.env.multi_agent_env import MultiAgentEnv as MAEnv
 
 from common.imports import *
 from .reward import LineMarginReward, RedispRewardv1, N1ContingencyRewardv1, FlatRewardv1, DistanceRewardv1, OverloadReward
+
+
+try:
+    from ray.rllib.env.multi_agent_env import MultiAgentEnv as MAEnv
+except ModuleNotFoundError as exc:
+    if exc.name != "ray":
+        raise
+
+    class MAEnv(gym.Env):
+        pass
+
+
+def _install_grid2op_louvain_stub() -> None:
+    """Provide grid2op's optional Louvain module when absent in dev builds."""
+    cluster_utils = types.ModuleType("grid2op.cluster_utils")
+    louvain_module = types.ModuleType("grid2op.cluster_utils.louvainClustering")
+
+    class LouvainClustering:
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                "LouvainClustering is unavailable in this grid2op installation. "
+                "Install a grid2op build that includes grid2op.cluster_utils to use it."
+            )
+
+    louvain_module.LouvainClustering = LouvainClustering
+    cluster_utils.louvainClustering = louvain_module
+    sys.modules.setdefault("grid2op.cluster_utils", cluster_utils)
+    sys.modules.setdefault("grid2op.cluster_utils.louvainClustering", louvain_module)
+
+
+try:
+    from grid2op.multi_agent import MultiAgentEnv
+except ModuleNotFoundError as exc:
+    if not exc.name or not exc.name.startswith("grid2op.cluster_utils"):
+        raise
+    _install_grid2op_louvain_stub()
+    from grid2op.multi_agent import MultiAgentEnv
 
 # Get the directory of the current module
 ENV_DIR = os.path.dirname(__file__)
@@ -275,6 +313,10 @@ class MAEnvWrapper(MAEnv):
         
     def seed(self, seed):
         return self.g2op_ma_env.seed(seed)
+
+    def close(self):
+        if hasattr(self, "g2op_env"):
+            self.g2op_env.close()
     
     def _format_obs(self, grid2op_obs):
         gym_obs = {

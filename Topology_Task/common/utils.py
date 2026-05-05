@@ -20,7 +20,17 @@ def stack_agent_obs_by_env(obs_dict):
 
 # Creating a list of dicts for each env's actions
 def split_action_tensor_dict(action_dict):
-    return [dict(zip(action_dict, t)) for t in zip(*action_dict.values())]
+    def to_env_action(action):
+        if isinstance(action, th.Tensor):
+            action = action.detach().cpu().numpy()
+        if isinstance(action, np.ndarray) and action.shape == ():
+            return action.item()
+        return action
+
+    return [
+        {agent_id: to_env_action(action) for agent_id, action in zip(action_dict.keys(), per_env_actions)}
+        for per_env_actions in zip(*action_dict.values())
+    ]
 
 def set_torch(n_threads: int = 0, deterministic: bool = True, cuda: bool = False) -> th.device:
     """Configure PyTorch settings including the number of threads, determinism, and CUDA usage.
@@ -108,4 +118,3 @@ th_act_fns = {
     'relu': nn.ReLU(),
     'leaky_relu': nn.LeakyReLU(),
 }
-
