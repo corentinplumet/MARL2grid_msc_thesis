@@ -19,6 +19,11 @@ Usage:
   sbatch run_jobs/job.sh [preset] [main.py args...]
   sbatch run_jobs/job.sh --env-id bus14 --alg MAPPO --seed 0 --cuda true
 
+  sbatch run_jobs/job.sh mappo14 \
+  --track true \
+  --wandb-entity corentin-plumet-epfl \
+  --wandb-project marl2grid
+
 Presets:
   mappo14        --env-id bus14 --alg MAPPO
   qplex14        --env-id bus14 --alg QPLEX
