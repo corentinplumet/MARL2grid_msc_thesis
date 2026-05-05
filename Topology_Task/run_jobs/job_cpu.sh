@@ -1,120 +1,92 @@
 #!/bin/bash
 #SBATCH --mail-user=corentin.plumet@epfl.ch
-#SBATCH --output=/home/plumet/msc_thesis/run_jobs/job_out_%j.log
-#SBATCH --error=/home/plumet/msc_thesis/run_jobs/job_err_%j.log
-#SBATCH --chdir=/home/plumet/msc_thesis
-
+#SBATCH --output=run_jobs/job_out_%j.log
+#SBATCH --error=run_jobs/job_err_%j.log
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=02:00:00
 #SBATCH --partition=academic
+#SBATCH --gres=gpu:1
 
-# Activate environment
-source /home/plumet/msc_thesis/.venv/bin/activate
+set -euo pipefail
 
-# Force CPU
-export CUDA_VISIBLE_DEVICES=""
+usage() {
+  cat <<'EOF'
+Usage:
+  sbatch run_jobs/job\ copy.sh [preset] [main.py args...]
+  sbatch run_jobs/job\ copy.sh --env-id bus14 --alg MAPPO --seed 0 --cuda true
 
-# Optional: keep PyTorch/NumPy thread usage aligned with Slurm allocation
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
+Presets:
+  mappo14        --env-id bus14 --alg MAPPO
+  qplex14        --env-id bus14 --alg QPLEX
+  lagrmappo14    --env-id bus14 --alg LAGRMAPPO --constraints-type 1
 
-# === Base paths ===
-BASE_DIR=/home/plumet/msc_thesis/src/RL
-EXPERIMENT_CONFIG_DIR=$BASE_DIR/configs/experiments
-EVAL_CONFIG_DIR=$BASE_DIR/configs/eval
+Examples:
+  sbatch run_jobs/job\ copy.sh mappo14 --seed 2 --track true
+  sbatch run_jobs/job\ copy.sh qplex14 --seed 0 --total-timesteps 25000000
+  sbatch run_jobs/job\ copy.sh --env-id bus14 --alg MAPPO --use-heuristic false
 
-# === Argument ===
-MODE=$1
-MODEL_PATH=$2
+Environment overrides:
+  PROJECT_DIR=/path/to/Topology_Task
+  VENV_PATH=/path/to/.venv
+  CONDA_ENV_NAME=marl2grid
+EOF
+}
 
-echo "Running mode: ${MODE}"
-echo "Started at: $(date)"
-echo "CPU task with ${SLURM_CPUS_PER_TASK} CPUs"
-if [ -n "$MODEL_PATH" ]; then
-  echo "Model path: ${MODEL_PATH}"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${PROJECT_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+VENV_PATH="${VENV_PATH:-${PROJECT_DIR}/.venv}"
+CONDA_ENV_NAME="${CONDA_ENV_NAME:-marl2grid}"
 
-case $MODE in
+PRESET="${1:-mappo14}"
+ARGS=(--cuda true --n-threads "${SLURM_CPUS_PER_TASK:-4}")
 
-  baseline_random14)
-    python $BASE_DIR/run_baseline.py \
-      --config $EXPERIMENT_CONFIG_DIR/random_case14.toml
+case "${PRESET}" in
+  --help|-h)
+    usage
+    exit 0
     ;;
-
-  baseline_do_nothing14)
-    python $BASE_DIR/run_baseline.py \
-      --config $EXPERIMENT_CONFIG_DIR/do_nothing_case14.toml
+  mappo14)
+    ARGS+=(--env-id bus14 --alg MAPPO)
+    if [ "$#" -gt 0 ]; then shift; fi
     ;;
-
-  baseline_do_nothing36)
-    python $BASE_DIR/run_baseline.py \
-      --config $EXPERIMENT_CONFIG_DIR/do_nothing_case36.toml
+  qplex14)
+    ARGS+=(--env-id bus14 --alg QPLEX)
+    if [ "$#" -gt 0 ]; then shift; fi
     ;;
-
-  greedy14)
-    python $BASE_DIR/run_baseline.py \
-      --config $EXPERIMENT_CONFIG_DIR/greedy_case14.toml
+  lagrmappo14)
+    ARGS+=(--env-id bus14 --alg LAGRMAPPO --constraints-type 1)
+    if [ "$#" -gt 0 ]; then shift; fi
     ;;
-
-  greedy36)
-    python $BASE_DIR/run_baseline.py \
-      --config $EXPERIMENT_CONFIG_DIR/greedy_case36.toml
-    ;;
-
-  ppo14)
-    python $BASE_DIR/train.py \
-      --config $EXPERIMENT_CONFIG_DIR/ppo_vanilla_case14.toml \
-      --device cpu
-    ;;
-
-  ppo14_rules)
-    python $BASE_DIR/train.py \
-      --config $EXPERIMENT_CONFIG_DIR/ppo_heuristic_rules_case14.toml \
-      --device cpu
-    ;;
-
-  eval_ppo14)
-    if [ -z "$MODEL_PATH" ]; then
-      echo "Missing model path for eval_ppo14"
-      echo "Usage: sbatch run_jobs/job_cpu.sh eval_ppo14 /abs/path/to/model.zip"
-      exit 1
-    fi
-    python $BASE_DIR/evaluate_model.py \
-      --config $EVAL_CONFIG_DIR/ppo_vanilla_case14.toml \
-      --model-path $MODEL_PATH \
-      --device cpu
-    ;;
-
-  eval_ppo14_rules)
-    if [ -z "$MODEL_PATH" ]; then
-      echo "Missing model path for eval_ppo14_rules"
-      echo "Usage: sbatch run_jobs/job_cpu.sh eval_ppo14_rules /abs/path/to/model.zip"
-      exit 1
-    fi
-    python $BASE_DIR/evaluate_model.py \
-      --config $EVAL_CONFIG_DIR/ppo_heuristic_rules_case14.toml \
-      --model-path $MODEL_PATH \
-      --device cpu
-    ;;
-
-  *)
-    echo "Unknown mode: $MODE"
-    echo "Available modes:"
-    echo "  baseline_random14"
-    echo "  baseline_do_nothing14"
-    echo "  baseline_do_nothing36"
-    echo "  greedy14"
-    echo "  greedy36"
-    echo "  ppo14"
-    echo "  ppo14_rules"
-    echo "  eval_ppo14 <model_path>"
-    echo "  eval_ppo14_rules <model_path>"
-    exit 1
-    ;;
-
 esac
 
-echo "FINISHED AT: $(date)"
+ARGS+=("$@")
+
+mkdir -p "${PROJECT_DIR}/run_jobs"
+cd "${PROJECT_DIR}"
+
+if [ -d "${VENV_PATH}" ]; then
+  source "${VENV_PATH}/bin/activate"
+elif command -v conda >/dev/null 2>&1; then
+  CONDA_BASE="$(conda info --base)"
+  source "${CONDA_BASE}/etc/profile.d/conda.sh"
+  conda activate "${CONDA_ENV_NAME}"
+else
+  echo "No virtualenv found at ${VENV_PATH}, and conda is not available." >&2
+  echo "Set VENV_PATH or CONDA_ENV_NAME before submitting the job." >&2
+  exit 1
+fi
+
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"
+export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"
+
+echo "Project dir: ${PROJECT_DIR}"
+echo "Started at: $(date)"
+echo "Python: $(command -v python)"
+echo "Command: python main.py ${ARGS[*]}"
+
+python main.py "${ARGS[@]}"
+
+echo "Finished at: $(date)"
