@@ -15,8 +15,8 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  sbatch run_jobs/job\ copy.sh [preset] [main.py args...]
-  sbatch run_jobs/job\ copy.sh --env-id bus14 --alg MAPPO --seed 0 --cuda true
+  sbatch run_jobs/job.sh [preset] [main.py args...]
+  sbatch run_jobs/job.sh --env-id bus14 --alg MAPPO --seed 0 --cuda true
 
 Presets:
   mappo14        --env-id bus14 --alg MAPPO
@@ -24,9 +24,9 @@ Presets:
   lagrmappo14    --env-id bus14 --alg LAGRMAPPO --constraints-type 1
 
 Examples:
-  sbatch run_jobs/job\ copy.sh mappo14 --seed 2 --track true
-  sbatch run_jobs/job\ copy.sh qplex14 --seed 0 --total-timesteps 25000000
-  sbatch run_jobs/job\ copy.sh --env-id bus14 --alg MAPPO --use-heuristic false
+  sbatch run_jobs/job.sh mappo14 --seed 2 --track true
+  sbatch run_jobs/job.sh qplex14 --seed 0 --total-timesteps 25000000
+  sbatch run_jobs/job.sh --env-id bus14 --alg MAPPO --use-heuristic false
 
 Environment overrides:
   PROJECT_DIR=/path/to/Topology_Task

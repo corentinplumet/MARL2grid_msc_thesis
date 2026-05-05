@@ -1,1 +1,0 @@
-git+https://github.com/rte-france/grid2op.git@v1.10.4
