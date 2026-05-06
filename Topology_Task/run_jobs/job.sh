@@ -20,9 +20,18 @@ Usage: sbatch run_jobs/job.sh [preset] [main.py args...]
 Presets: mappo14, qplex14, lagrmappo14
 
 Examples:
+  Local smoke test:
+    python main.py --cuda false --checkpoint false --n-threads 1 --n-envs 1 --n-steps 20 --eval-freq 1000000 --time-limit 5 --total-timesteps 200 --env-id bus14 --alg MAPPO --seed 0
+
+  Cluster examples:
   sbatch run_jobs/job.sh
+    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 520 --eval-freq 20000 --time-limit 110 --env-id bus14 --alg MAPPO
+
   sbatch run_jobs/job.sh qplex14 --seed 2 --track true
+    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 520 --eval-freq 20000 --time-limit 110 --env-id bus14 --alg QPLEX --seed 2 --track true
+
   sbatch run_jobs/job.sh --env-id bus14 --alg MAPPO --seed 0
+    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 520 --eval-freq 20000 --time-limit 110 --env-id bus14 --alg MAPPO --seed 0
 
 Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME
 EOF
