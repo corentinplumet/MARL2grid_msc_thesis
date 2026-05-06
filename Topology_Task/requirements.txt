@@ -29,4 +29,4 @@ pandapower==2.14.11
 LightSim2Grid==0.9.0
 deepdiff==9.0.0
 pybind11==3.0.4
-Grid2Op @ git+https://github.com/Grid2op/grid2op.git@v1.10.4
+Grid2Op @ git+https://github.com/Grid2op/grid2op.git@dev_multiagent
