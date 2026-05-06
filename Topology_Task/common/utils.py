@@ -1,7 +1,5 @@
 from argparse import ArgumentTypeError
 
-from torch.utils.tensorboard import SummaryWriter
-
 from .imports import *
 
 seed = 0    # Global variable to store the seed
