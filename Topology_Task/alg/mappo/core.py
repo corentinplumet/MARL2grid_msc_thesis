@@ -81,8 +81,11 @@ class MAPPO:
         global_step = 0 if not ckpt.resumed else ckpt.loaded_run['global_step']
         start_time = start_time
         last_ckpt_time = start_time            # <-- track last checkpoint timestamp
+        progress_interval = max(1, min(100, args.n_steps))
         next_obs, _ = envs.reset()
         next_obs = cast_np_to_tensors(next_obs, device)     
+        iteration = init_rollout
+        stop_training = False
         try:
             for iteration in range(init_rollout, n_rollouts + 1):
                 # Annealing the rate if instructed to do so
@@ -127,10 +130,25 @@ class MAPPO:
                         if done: 
                             for agent in agent_ids:
                                 real_next_obs[agent][idx] = th.tensor(infos[idx]["final_observation"][agent]).to(device)
+
+                    if args.verbose and (step + 1) % progress_interval == 0:
+                        elapsed = max(time() - start_time, 1e-9)
+                        print(
+                            f"rollout={iteration}/{n_rollouts} step={step + 1}/{args.n_steps} "
+                            f"global_step={global_step} SPS={int(global_step / elapsed)}",
+                            flush=True,
+                        )
                     
                     if global_step % args.eval_freq == 0:
                         evaluator.evaluate(global_step, actors)
-                        if args.verbose: print(f"SPS={int(global_step / (time() - start_time))}")
+                        if args.verbose: print(f"SPS={int(global_step / (time() - start_time))}", flush=True)
+
+                    if (time() - start_time) / 60 >= args.time_limit:
+                        stop_training = True
+                        break
+
+                if stop_training:
+                    break
 
                 # Bootstrap value if not done
                 with th.no_grad():

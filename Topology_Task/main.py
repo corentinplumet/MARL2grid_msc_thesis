@@ -58,8 +58,12 @@ def main(args: Namespace) -> None:
     # Resume run if checkpoint was resumed
     if checkpoint.resumed: args = checkpoint.loaded_run['args']
   
+    if args.verbose:
+        print(f"Creating {args.n_envs} vector environments...", flush=True)
     env_fns = [lambda i=i: MAEnvWrapper(args, idx=i) for i in range(args.n_envs)]
     envs = AsyncMultiAgentVecEnv(env_fns)
+    if args.verbose:
+        print("Vector environments ready.", flush=True)
     
     # Run the specified algorithm
     ALGORITHMS[alg](envs, run_name, start_time, args, checkpoint)

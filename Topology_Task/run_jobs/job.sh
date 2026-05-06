@@ -4,7 +4,7 @@
 #SBATCH --error=run_jobs/job_err_%j.log
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=5
+#SBATCH --cpus-per-task=40
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
 #SBATCH --partition=gpu
@@ -53,14 +53,20 @@ case "${1:-mappo14}" in
     ;;
 esac
 
+N_ENVS="${N_ENVS:-${SLURM_CPUS_PER_TASK:-40}}"
+ROLLOUT_BATCH="${ROLLOUT_BATCH:-20800}"
+N_STEPS="${N_STEPS:-$(( ((ROLLOUT_BATCH + N_ENVS * N_ENVS - 1) / (N_ENVS * N_ENVS)) * N_ENVS ))}"
+EVAL_FREQ="${EVAL_FREQ:-$((N_ENVS * 500))}"
+PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+
 ARGS=(
   --cuda true
   --checkpoint true
-  --n-threads 4
-  --n-envs 40
-  --n-steps 520
-  --eval-freq 20000
-  --time-limit 2780
+  --n-threads 1
+  --n-envs "${N_ENVS}"
+  --n-steps "${N_STEPS}"
+  --eval-freq "${EVAL_FREQ}"
+  --time-limit "${PY_TIME_LIMIT}"
   "$@"
 )
 
@@ -90,6 +96,9 @@ echo "Project dir: ${PROJECT_DIR}"
 echo "Started at: $(date)"
 echo "Python: $(command -v python)"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-unset}"
+echo "SLURM_CPUS_PER_TASK: ${SLURM_CPUS_PER_TASK:-unset}"
+echo "Vector envs: ${N_ENVS}, rollout steps: ${N_STEPS}, rollout batch: $((N_ENVS * N_STEPS))"
+echo "Python time limit: ${PY_TIME_LIMIT} minutes"
 echo "Command: python main.py ${ARGS[*]}"
 
 python main.py "${ARGS[@]}"
