@@ -2,7 +2,7 @@ from collections import deque
 
 from common.imports import *
 from common.logger import Logger
-from common.utils import cast_np_to_tensors, stack_agent_obs_by_env
+from common.utils import cast_np_to_tensors
 from .utils import MAEnvWrapper
 from .wrappers import RecordEpisodeStatistics
 

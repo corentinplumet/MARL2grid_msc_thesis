@@ -21,7 +21,7 @@ Presets: mappo14, qplex14, lagrmappo14
 
 Examples:
   Local smoke test:
-    python main.py --cuda false --checkpoint false --n-threads 1 --n-envs 1 --n-steps 20 --eval-freq 1000000 --time-limit 5 --total-timesteps 200 --env-id bus14 --alg MAPPO --seed 0
+    python main.py --cuda false --checkpoint false --n-threads 1 --n-envs 1 --n-steps 5 --eval-freq 1000000 --time-limit 2 --total-timesteps 20 --env-id bus14 --alg MAPPO --seed 0
 
   Cluster examples:
   sbatch run_jobs/job.sh
@@ -68,6 +68,50 @@ N_STEPS="${N_STEPS:-$(( ((ROLLOUT_BATCH + N_ENVS * N_ENVS - 1) / (N_ENVS * N_ENV
 EVAL_FREQ="${EVAL_FREQ:-$((N_ENVS * 500))}"
 PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
 
+print_resource_summary() {
+  echo "========== SLURM resource summary =========="
+  echo "Job id: ${SLURM_JOB_ID:-unset}"
+  echo "Job name: ${SLURM_JOB_NAME:-unset}"
+  echo "Account: ${SLURM_JOB_ACCOUNT:-unset}"
+  echo "Partition: ${SLURM_JOB_PARTITION:-unset}"
+  echo "QoS: ${SLURM_JOB_QOS:-unset}"
+  echo "Submit dir: ${SLURM_SUBMIT_DIR:-unset}"
+  echo "Node list: ${SLURM_JOB_NODELIST:-unset}"
+  echo "Current host: $(hostname)"
+  echo "Nodes: ${SLURM_NNODES:-unset}"
+  echo "Tasks: ${SLURM_NTASKS:-unset}"
+  echo "CPUs per task: ${SLURM_CPUS_PER_TASK:-unset}"
+  echo "CPUs on node: ${SLURM_CPUS_ON_NODE:-unset}"
+  echo "Memory per node: ${SLURM_MEM_PER_NODE:-unset} MB"
+  echo "Memory per CPU: ${SLURM_MEM_PER_CPU:-unset} MB"
+  echo "Requested GPUs: ${SLURM_GPUS:-unset}"
+  echo "Allocated job GPUs: ${SLURM_JOB_GPUS:-unset}"
+  echo "Step GPUs: ${SLURM_STEP_GPUS:-unset}"
+  echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-unset}"
+  echo "Time limit: ${SLURM_TIMELIMIT:-unset}"
+
+  if command -v scontrol >/dev/null 2>&1 && [ -n "${SLURM_JOB_ID:-}" ]; then
+    echo "scontrol job details:"
+    scontrol show job "${SLURM_JOB_ID}" || true
+  fi
+
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    echo "GPU details:"
+    nvidia-smi --query-gpu=index,name,uuid,memory.total,memory.free,driver_version --format=csv || true
+  fi
+
+  if command -v free >/dev/null 2>&1; then
+    echo "Node memory:"
+    free -h || true
+  fi
+
+  if command -v lscpu >/dev/null 2>&1; then
+    echo "CPU summary:"
+    lscpu | grep -E '^(Architecture|CPU\\(s\\)|Thread\\(s\\) per core|Core\\(s\\) per socket|Socket\\(s\\)|Model name|NUMA node\\(s\\)):' || true
+  fi
+  echo "============================================"
+}
+
 ARGS=(
   --cuda true
   --checkpoint true
@@ -103,9 +147,8 @@ mkdir -p "${MPLCONFIGDIR}"
 
 echo "Project dir: ${PROJECT_DIR}"
 echo "Started at: $(date)"
+print_resource_summary
 echo "Python: $(command -v python)"
-echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-unset}"
-echo "SLURM_CPUS_PER_TASK: ${SLURM_CPUS_PER_TASK:-unset}"
 echo "Vector envs: ${N_ENVS}, rollout steps: ${N_STEPS}, rollout batch: $((N_ENVS * N_STEPS))"
 echo "Python time limit: ${PY_TIME_LIMIT} minutes"
 echo "Command: python main.py ${ARGS[*]}"

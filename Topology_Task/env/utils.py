@@ -16,6 +16,8 @@ from grid2op.Reward import CombinedReward
 from lightsim2grid import LightSimBackend
 
 from common.imports import *
+from common.graph import GridGraphBuilder
+from common.utils import any_gnn_enabled
 from .reward import LineMarginReward, RedispRewardv1, N1ContingencyRewardv1, FlatRewardv1, DistanceRewardv1, OverloadReward
 
 
@@ -253,6 +255,18 @@ class MAEnvWrapper(MAEnv):
             })
 
         self.use_heuristic = args.use_heuristic
+
+        self.use_graph_obs = any_gnn_enabled(args)
+        self.graph_builder = None
+        self.graph_specs = None
+        if self.use_graph_obs:
+            self.graph_builder = GridGraphBuilder(
+                self.g2op_env,
+                self.observation_domains,
+                include_neighbors=getattr(args, "gnn_include_neighbors", True),
+                graph_type=getattr(args, "gnn_graph_type", "substation"),
+            )
+            self.graph_specs = self.graph_builder.specs
     
     @property
     def _risk_overflow(self) -> bool:
@@ -319,16 +333,28 @@ class MAEnvWrapper(MAEnv):
             self.g2op_env.close()
     
     def _format_obs(self, grid2op_obs):
-        gym_obs = {
+        flat_obs = {
             agent_id : self._aux_observation_space[agent_id].to_gym(grid2op_obs[agent_id])
             for agent_id in self.g2op_ma_env.agents
         }
         if self.norm_obs:
-            self._update_stats(gym_obs)
-            gym_obs = self._normalize(gym_obs)
+            self._update_stats(flat_obs)
+            flat_obs = self._normalize(flat_obs)
+
+        if self.use_graph_obs:
+            graphs = self.graph_builder.build(self._obs)
+            gym_obs = {
+                agent_id: {
+                    "flat": flat_obs[agent_id],
+                    "graph": graphs[agent_id],
+                    "state_graph": graphs["state"],
+                }
+                for agent_id in self.g2op_ma_env.agents
+            }
+            return gym_obs
 
         # return the proper dictionnary
-        return gym_obs
+        return flat_obs
 
     def _update_stats(self, obs):
         for agent_id, ob in obs.items():
@@ -381,9 +407,11 @@ class MAEnvWrapper(MAEnv):
         return gym_obs, r, done, truncateds, info
 
     def _get_cost(self, done, info): 
-        if self.constraints_type == 1:  # TODO add check on n° steps (if it's done but the grid survived for the entire episode, it's not a constraint violation)
-            if done['agent_0']: info['cost'] = 1
-            else: info['cost'] = 0
+        if self.constraints_type == 1:
+            info['cost'] = int(
+                done['agent_0']
+                and self.g2op_ma_env._cent_env.nb_time_step < self.g2op_env.chronics_handler.max_episode_duration()
+            )
         elif self.constraints_type == 2:
             n_disconnections = sum(~self.g2op_ma_env._cent_env.current_obs.line_status)
             n_overloads = 0     # If it's game over and the grid is disconnected (i..e, n_disconnections = n_lines), then we cannot get the thermal limit and we don't have to compute n_overloads

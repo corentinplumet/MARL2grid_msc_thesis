@@ -1,8 +1,11 @@
 from time import time
 
 from alg.qplex.core import QPLEX
+from alg.qplex.config import get_alg_args as get_qplex_args
 from alg.lagr_mappo.core import LagrMAPPO
+from alg.lagr_mappo.config import get_alg_args as get_lagr_mappo_args
 from alg.mappo.core import MAPPO
+from alg.mappo.config import get_alg_args as get_mappo_args
 from common.checkpoint import MAPPOCheckpoint, QPLEXCheckpoint, LagrMAPPOCheckpoint
 from common.imports import *
 from common.utils import set_random_seed, set_torch, str2bool
@@ -12,6 +15,7 @@ from env.wrappers import AsyncMultiAgentVecEnv
 
 # Dictionary mapping algorithm names to their corresponding classes
 ALGORITHMS: Dict[str, Type[Any]] = {'QPLEX': QPLEX, 'MAPPO': MAPPO, 'LAGRMAPPO': LagrMAPPO}
+ALGORITHM_ARGS = {'QPLEX': get_qplex_args, 'MAPPO': get_mappo_args, 'LAGRMAPPO': get_lagr_mappo_args}
 
 def main(args: Namespace) -> None:
     """
@@ -33,6 +37,8 @@ def main(args: Namespace) -> None:
     
     alg = args.alg.upper()
     assert alg in ALGORITHMS.keys(), f"Unsupported algorithm: {alg}. Supported algorithms are: {ALGORITHMS}"
+    if not args.resume_run_name:
+        args = ap.Namespace(**vars(args), **vars(ALGORITHM_ARGS[alg]()))
     if (alg == "LAGRMAPPO" and args.constraints_type == 0) or (alg != "LAGRMAPPO" and args.constraints_type in [1, 2]):
         raise ValueError("Check the constrained version of the alg/env!")
 

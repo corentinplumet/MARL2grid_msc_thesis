@@ -1,4 +1,6 @@
 from common.imports import *
+from common.gnn import GraphAndFlatEncoder
+from common.utils import get_flat_obs
 from common.utils import Linear, th_act_fns
 
 class QNetwork(nn.Module):
@@ -20,10 +22,26 @@ class QNetwork(nn.Module):
         super().__init__()
 
         act_str, act_fn = args.act_fn, th_act_fns[args.act_fn]
+        self.encoder_type = args.q_encoder
+        flat_dim = np.prod(envs.observation_space[f"agent_{id}"].shape)
+
+        if self.encoder_type == "gnn":
+            if envs.graph_specs is None:
+                raise ValueError("q_encoder=gnn requires graph observations from the environment.")
+            self.encoder = GraphAndFlatEncoder(
+                envs.graph_specs[f"agent_{id}"],
+                flat_dim=flat_dim,
+                args=args,
+                use_flat=args.gnn_concat_flat,
+            )
+            input_dim = self.encoder.out_dim
+        else:
+            self.encoder = nn.Identity()
+            input_dim = flat_dim
 
         layers = []
         layers.extend([
-            Linear(np.prod(envs.observation_space[f"agent_{id}"].shape), args.layers[0], act_str), 
+            Linear(input_dim, args.layers[0], act_str),
             act_fn
         ])
         for idx, embed_dim in enumerate(args.layers[1:], start=1): 
@@ -32,6 +50,11 @@ class QNetwork(nn.Module):
         layers.append(Linear(args.layers[-1], envs.action_space[f"agent_{id}"].n, 'linear'))
 
         self.qnet = nn.Sequential(*layers)
+
+    def _encode(self, x):
+        if self.encoder_type == "gnn":
+            return self.encoder(x, graph_key="graph")
+        return get_flat_obs(x)
     
     def forward(self, x: th.Tensor) -> th.Tensor:
         """Forward pass through the Q-Network.
@@ -42,7 +65,7 @@ class QNetwork(nn.Module):
         Returns:
             Tensor with Q-values for each action.
         """
-        return self.qnet(x)
+        return self.qnet(self._encode(x))
 
     def get_action(self, x: th.Tensor) -> np.ndarray:
         """Get the action with the highest Q-value.
@@ -72,28 +95,49 @@ class QNetwork(nn.Module):
 
 
 class QPLEXMixer(nn.Module):
-    def __init__(self, n_agents, state_dim, transf_embed_dim, n_heads, mix_embed_dim, 
-                 mix_embed_layers, is_minus_one, weighted_head, detach=0):
+    def __init__(self, n_agents, state_dim, transf_embed_dim, n_heads, mix_embed_dim,
+                 mix_embed_layers, is_minus_one, weighted_head, detach=0,
+                 mixer_encoder="mlp", graph_spec=None, args=None):
         super().__init__()
 
         self.n_agents = n_agents
         self.state_dim = state_dim
+        self.encoder_type = mixer_encoder
         self.detach = detach
 
         self.action_dim = n_agents
+        if self.encoder_type == "gnn":
+            if graph_spec is None or args is None:
+                raise ValueError("mixer_encoder=gnn requires a graph spec and args.")
+            self.state_encoder = GraphAndFlatEncoder(
+                graph_spec,
+                flat_dim=state_dim,
+                args=args,
+                use_flat=args.gnn_concat_flat,
+            )
+            mixer_state_dim = self.state_encoder.out_dim
+        else:
+            self.state_encoder = nn.Identity()
+            mixer_state_dim = state_dim
+        self.mixer_state_dim = mixer_state_dim
 
-        self.mlp_w = nn.Sequential(nn.Linear(self.state_dim, transf_embed_dim),
+        self.mlp_w = nn.Sequential(nn.Linear(self.mixer_state_dim, transf_embed_dim),
                                         nn.ReLU(),
                                         nn.Linear(transf_embed_dim, self.n_agents))
-        self.v_bias = nn.Sequential(nn.Linear(self.state_dim, transf_embed_dim),
+        self.v_bias = nn.Sequential(nn.Linear(self.mixer_state_dim, transf_embed_dim),
                                nn.ReLU(),
                                nn.Linear(transf_embed_dim, self.n_agents))
 
-        self.si_weight = AttentionQPLEX(n_agents, self.state_dim, self.action_dim,
+        self.si_weight = AttentionQPLEX(n_agents, self.mixer_state_dim, self.action_dim,
                                          n_heads, mix_embed_dim, mix_embed_layers)
 
         self.is_minus_one = is_minus_one
         self.weighted_head = weighted_head
+
+    def _encode_state(self, states):
+        if self.encoder_type == "gnn":
+            return self.state_encoder(states, graph_key="state_graph")
+        return get_flat_obs(states)
     
     def compute_v_mix(self, q_vals):
         return th.sum(q_vals.view(-1, self.n_agents), dim=-1)
@@ -126,7 +170,7 @@ class QPLEXMixer(nn.Module):
                 is_v=False      # whether we are combining V or A
         ):
         bs = q_vals.size(0)
-        states = states.reshape(-1, self.state_dim)
+        states = self._encode_state(states).reshape(-1, self.mixer_state_dim)
         q_vals = q_vals.view(-1, self.n_agents)
       
         w_2 = th.abs(self.mlp_w(states)).view(-1, self.n_agents) + 1e-10

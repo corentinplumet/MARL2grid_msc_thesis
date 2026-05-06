@@ -8,7 +8,13 @@ from .memory import Buffer
 from common.checkpoint import CheckpointSaver
 from common.imports import *
 from common.logger import Logger
-from common.utils import cast_np_to_tensors, stack_agent_obs_by_env
+from common.utils import (
+    cast_np_to_tensors,
+    clone_nested,
+    get_joint_obs,
+    set_nested_env_index,
+    strip_state_graph,
+)
 from env.eval import Evaluator
 
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int) -> float:
@@ -68,8 +74,11 @@ class QPLEX:
         mixer_params = [len(agent_ids), state_dim, 
                             args.transf_embed_dim,
                             args.n_heads, args.mix_embed_dim,
-                            args.mix_embed_layers, args.is_minus_one, args.weighted_head]
-        mixer, tg_mixer = [QPLEXMixer(*mixer_params) for _ in range(2)]
+                            args.mix_embed_layers, args.is_minus_one, args.weighted_head,
+                            0, args.mixer_encoder,
+                            None if envs.graph_specs is None else envs.graph_specs["state"],
+                            args]
+        mixer, tg_mixer = [QPLEXMixer(*mixer_params).to(device) for _ in range(2)]
         tg_mixer.load_state_dict(mixer.state_dict())
 
         if ckpt.resumed: 
@@ -121,29 +130,30 @@ class QPLEX:
 
                 next_obs, rewards, terminations, truncations, infos = envs.step(action)
 
-                next_obs = cast_np_to_tensors(next_obs, device)      
+                next_obs = cast_np_to_tensors(next_obs, device)
                 dones = np.logical_or(terminations[agent_ids[0]], truncations[agent_ids[0]])
 
-                real_next_obs = next_obs.copy()                    
+                real_next_obs = clone_nested(next_obs)
                 for idx, done in enumerate(dones):
                     if done: 
+                        final_obs = cast_np_to_tensors(infos[idx]["final_observation"], device)
                         for agent in agent_ids:
-                            real_next_obs[agent][idx] = th.tensor(infos[idx]["final_observation"][agent]).to(device)
+                            set_nested_env_index(real_next_obs[agent], idx, final_obs[agent])
                     
-                state = stack_agent_obs_by_env(obs) if args.decentralized else obs['agent_0']
-                next_state = stack_agent_obs_by_env(real_next_obs) if args.decentralized else real_next_obs['agent_0']
+                state = get_joint_obs(obs, args.mixer_encoder, args.decentralized)
+                next_state = get_joint_obs(real_next_obs, args.mixer_encoder, args.decentralized)
                 for agent in agent_ids:
                     buffers[agent].store(
-                        obs[agent],
+                        strip_state_graph(obs[agent]),
                         action[agent],
                         rewards[agent],
-                        real_next_obs[agent],
-                        done,
+                        strip_state_graph(real_next_obs[agent]),
+                        dones,
                         state,
                         next_state
                     )
 
-                obs = next_obs.copy()           
+                obs = clone_nested(next_obs)
 
                 if global_step % args.eval_freq == 0:
                     evaluator.evaluate(global_step, qnets)
