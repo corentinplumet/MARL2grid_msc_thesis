@@ -46,8 +46,18 @@ Environment overrides:
 EOF
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="${PROJECT_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+if [ -z "${PROJECT_DIR:-}" ]; then
+  if [ -n "${SLURM_SUBMIT_DIR:-}" ]; then
+    if [ "$(basename "${SLURM_SUBMIT_DIR}")" = "run_jobs" ]; then
+      PROJECT_DIR="$(cd "${SLURM_SUBMIT_DIR}/.." && pwd)"
+    else
+      PROJECT_DIR="$(cd "${SLURM_SUBMIT_DIR}" && pwd)"
+    fi
+  else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+  fi
+fi
 VENV_PATH="${VENV_PATH:-${PROJECT_DIR}/.venv}"
 CONDA_ENV_NAME="${CONDA_ENV_NAME:-marl2grid}"
 N_ENVS="${MARL2GRID_N_ENVS:-${SLURM_CPUS_PER_TASK:-40}}"
