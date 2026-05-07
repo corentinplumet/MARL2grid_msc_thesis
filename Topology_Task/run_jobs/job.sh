@@ -17,7 +17,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'EOF'
 Usage: sbatch run_jobs/job.sh [preset] [main.py args...]
 
-Presets: mappo14, qplex14, lagrmappo14
+Presets: mappo14, mappo14_fast, qplex14, lagrmappo14
 
 Examples:
   Local smoke test:
@@ -33,7 +33,11 @@ Examples:
   sbatch run_jobs/job.sh --env-id bus14 --alg MAPPO --seed 0
     python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 520 --eval-freq 20000 --time-limit 110 --env-id bus14 --alg MAPPO --seed 0
 
-Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME
+  Speed benchmark:
+  sbatch run_jobs/job.sh mappo14_fast --seed 0
+    python main.py --cuda false --checkpoint false --n-threads 1 --n-envs 16 --n-steps 256 --eval-freq 100000000 --time-limit 20 --env-id bus14 --alg MAPPO --track false --optimize-mem false --seed 0
+
+Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT
 EOF
   exit 0
 fi
@@ -52,6 +56,16 @@ case "${1:-mappo14}" in
     [ "$#" -gt 0 ] && shift
     set -- --env-id bus14 --alg MAPPO "$@"
     ;;
+  mappo14_fast)
+    [ "$#" -gt 0 ] && shift
+    N_ENVS="${N_ENVS:-16}"
+    ROLLOUT_BATCH="${ROLLOUT_BATCH:-4096}"
+    EVAL_FREQ="${EVAL_FREQ:-100000000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-20}"
+    CUDA="${CUDA:-false}"
+    CHECKPOINT="${CHECKPOINT:-false}"
+    set -- --env-id bus14 --alg MAPPO --track false --optimize-mem false "$@"
+    ;;
   qplex14)
     [ "$#" -gt 0 ] && shift
     set -- --env-id bus14 --alg QPLEX "$@"
@@ -67,6 +81,8 @@ ROLLOUT_BATCH="${ROLLOUT_BATCH:-20800}"
 N_STEPS="${N_STEPS:-$(( ((ROLLOUT_BATCH + N_ENVS * N_ENVS - 1) / (N_ENVS * N_ENVS)) * N_ENVS ))}"
 EVAL_FREQ="${EVAL_FREQ:-$((N_ENVS * 500))}"
 PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+CUDA="${CUDA:-true}"
+CHECKPOINT="${CHECKPOINT:-true}"
 
 print_resource_summary() {
   echo "========== SLURM resource summary =========="
@@ -113,8 +129,8 @@ print_resource_summary() {
 }
 
 ARGS=(
-  --cuda true
-  --checkpoint true
+  --cuda "${CUDA}"
+  --checkpoint "${CHECKPOINT}"
   --n-threads 1
   --n-envs "${N_ENVS}"
   --n-steps "${N_STEPS}"
