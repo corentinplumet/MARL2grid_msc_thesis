@@ -88,13 +88,14 @@ case "${1:-mappo14}" in
 
   table5_mappo14)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-10}"
+    N_ENVS="${N_ENVS:-40}"
     ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
     EVAL_FREQ="${EVAL_FREQ:-20000}"
     PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-false}"
+    CUDA="${CUDA:-true}"
     CHECKPOINT="${CHECKPOINT:-true}"
     set -- --env-id bus14 --alg MAPPO --use-heuristic false \
+      --track true \
       --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
       --gamma 0.99 --max-grad-norm 10 \
       --update-epochs 80 --n-minibatches 4 \
@@ -102,26 +103,28 @@ case "${1:-mappo14}" in
     ;;
   table5_qplex14)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-10}"
+    N_ENVS="${N_ENVS:-40}"
     ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
     EVAL_FREQ="${EVAL_FREQ:-20000}"
     PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-false}"
+    CUDA="${CUDA:-true}"
     CHECKPOINT="${CHECKPOINT:-true}"
     set -- --env-id bus14 --alg QPLEX --use-heuristic false \
+      --track true \
       --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
       --gamma 0.99 --train-freq 100 --tg-qnet-freq 2500 \
       --buffer-size 1000000 --batch-size 128 --lr 3e-5 --eps-decay-frac 0.5 "$@"
     ;;
   table5_lagrmappo14_l)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-10}"
+    N_ENVS="${N_ENVS:-40}"
     ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
     EVAL_FREQ="${EVAL_FREQ:-20000}"
     PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-false}"
+    CUDA="${CUDA:-true}"
     CHECKPOINT="${CHECKPOINT:-true}"
     set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 1 --use-heuristic false \
+      --track true \
       --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
       --gamma 0.99 --max-grad-norm 10 \
       --update-epochs 80 --n-minibatches 4 \
@@ -130,13 +133,14 @@ case "${1:-mappo14}" in
     ;;
   table5_lagrmappo14_o)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-10}"
+    N_ENVS="${N_ENVS:-40}"
     ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
     EVAL_FREQ="${EVAL_FREQ:-20000}"
     PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-false}"
+    CUDA="${CUDA:-true}"
     CHECKPOINT="${CHECKPOINT:-true}"
     set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 2 --use-heuristic false \
+      --track true \
       --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
       --gamma 0.99 --max-grad-norm 10 \
       --update-epochs 80 --n-minibatches 4 \
