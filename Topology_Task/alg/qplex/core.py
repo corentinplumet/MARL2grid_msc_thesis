@@ -12,6 +12,7 @@ from common.utils import (
     cast_np_to_tensors,
     clone_nested,
     get_joint_obs,
+    merge_namespaces,
     set_nested_env_index,
     strip_state_graph,
 )
@@ -47,7 +48,7 @@ class QPLEX:
             ckpt (CheckpointSaver): The checkpoint handler for saving and loading training state.
         """
         # Load algorithm-specific arguments if not resuming from a checkpoint
-        if not ckpt.resumed: args = ap.Namespace(**vars(args), **vars(get_alg_args()))
+        if not ckpt.resumed: args = merge_namespaces(get_alg_args(), args)
 
         assert args.train_freq % args.n_envs == 0, \
             f"Invalid train frequency: {args.train_freq}. Must be multiple of n_envs {args.n_envs}"

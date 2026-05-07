@@ -125,6 +125,13 @@ def any_gnn_enabled(args) -> bool:
     ]
     return any(getattr(args, key, "mlp") == "gnn" for key in encoder_keys)
 
+
+def merge_namespaces(*namespaces: Namespace) -> Namespace:
+    merged = {}
+    for namespace in namespaces:
+        merged.update(vars(namespace))
+    return Namespace(**merged)
+
 # Creating a list of dicts for each env's actions
 def split_action_tensor_dict(action_dict):
     def to_env_action(action):

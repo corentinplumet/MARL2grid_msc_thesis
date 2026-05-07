@@ -8,7 +8,7 @@ from alg.mappo.core import MAPPO
 from alg.mappo.config import get_alg_args as get_mappo_args
 from common.checkpoint import MAPPOCheckpoint, QPLEXCheckpoint, LagrMAPPOCheckpoint
 from common.imports import *
-from common.utils import set_random_seed, set_torch, str2bool
+from common.utils import merge_namespaces, set_random_seed, set_torch, str2bool
 from env.config import get_env_args
 from env.utils import MAEnvWrapper
 from env.wrappers import AsyncMultiAgentVecEnv
@@ -32,13 +32,13 @@ def main(args: Namespace) -> None:
     start_time = time()
     
     # Update args with environment arguments
-    args = ap.Namespace(**vars(args), **vars(get_env_args()))
+    args = merge_namespaces(args, get_env_args())
     assert args.n_envs >= 1, f"Invalid n° of environments: {args.n_envs}. Must be >= 1"
     
     alg = args.alg.upper()
     assert alg in ALGORITHMS.keys(), f"Unsupported algorithm: {alg}. Supported algorithms are: {ALGORITHMS}"
     if not args.resume_run_name:
-        args = ap.Namespace(**vars(args), **vars(ALGORITHM_ARGS[alg]()))
+        args = merge_namespaces(args, ALGORITHM_ARGS[alg]())
     if (alg == "LAGRMAPPO" and args.constraints_type == 0) or (alg != "LAGRMAPPO" and args.constraints_type in [1, 2]):
         raise ValueError("Check the constrained version of the alg/env!")
 
