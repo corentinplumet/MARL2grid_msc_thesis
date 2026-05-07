@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --mail-user=corentin.plumet@epfl.ch
-#SBATCH --output=run_jobs/job_out_%j.log
-#SBATCH --error=run_jobs/job_err_%j.log
+#SBATCH --output=routput_jobs/job_out_%j.log
+#SBATCH --error=routput_jobs/job_err_%j.log
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
@@ -67,168 +67,163 @@ fi
 VENV_PATH="${VENV_PATH:-${PROJECT_DIR}/.venv}"
 CONDA_ENV_NAME="${CONDA_ENV_NAME:-marl2grid}"
 
+set_default() {
+  local name="$1"
+  local value="$2"
+  if [ -z "${!name:-}" ]; then
+    printf -v "${name}" '%s' "${value}"
+  fi
+}
+
+set_table5_common() {
+  set_default ENV_ID bus14
+  set_default ALG "$1"
+  set_default USE_HEURISTIC false
+  set_default TRACK true
+  set_default TOTAL_TIMESTEPS 60000000
+  set_default GAMMA 0.99
+}
+
+set_table5_mappo() {
+  set_table5_common MAPPO
+  set_default MAX_GRAD_NORM 10
+  set_default UPDATE_EPOCHS 80
+  set_default N_MINIBATCHES 4
+  set_default ACTOR_LR 3e-5
+  set_default CRITIC_LR 3e-5
+  set_default CLIP_COEF 0.2
+}
+
+set_table5_qplex() {
+  set_table5_common QPLEX
+  set_default TRAIN_FREQ 100
+  set_default TG_QNET_FREQ 2500
+  set_default BUFFER_SIZE 1000000
+  set_default BATCH_SIZE 128
+  set_default LR 3e-5
+  set_default EPS_DECAY_FRAC 0.5
+}
+
+set_table5_lagrmappo() {
+  set_table5_common LAGRMAPPO
+  set_default CONSTRAINTS_TYPE "$1"
+  set_default MAX_GRAD_NORM 10
+  set_default UPDATE_EPOCHS 80
+  set_default N_MINIBATCHES 4
+  set_default ACTOR_LR 3e-5
+  set_default CRITIC_LR 3e-5
+  set_default CLIP_COEF 0.2
+  set_default COST_THRESHOLD "$2"
+  set_default LAG_MUL 0.0
+  set_default LAG_LR 0.05
+}
+
+set_fast_table5_runtime() {
+  set_default N_ENVS 40
+  set_default N_STEPS 500
+  set_default ROLLOUT_BATCH 20000
+  set_default EVAL_FREQ 20000
+  set_default PY_TIME_LIMIT 110
+  set_default CUDA true
+  set_default CHECKPOINT true
+}
+
+set_real_table5_runtime() {
+  set_default N_ENVS 10
+  set_default N_STEPS 2000
+  set_default ROLLOUT_BATCH 20000
+  set_default EVAL_FREQ 20000
+  set_default PY_TIME_LIMIT 110
+  set_default CUDA false
+  set_default CHECKPOINT true
+}
+
 case "${1:-mappo14}" in
   mappo14)
     [ "$#" -gt 0 ] && shift
-    set -- --env-id bus14 --alg MAPPO "$@"
+    set_default ENV_ID bus14
+    set_default ALG MAPPO
     ;;
 
   mappo14_fast_noheuristic)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-40}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-4000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-120}"
-    CUDA="${CUDA:-true}"
-    CHECKPOINT="${CHECKPOINT:-true}"
-    set -- --env-id bus14 --alg MAPPO --track false --use-heuristic false "$@"
+    set_default ENV_ID bus14
+    set_default ALG MAPPO
+    set_default USE_HEURISTIC false
+    set_default TRACK false
+    set_default N_ENVS 40
+    set_default ROLLOUT_BATCH 4000
+    set_default EVAL_FREQ 20000
+    set_default PY_TIME_LIMIT 120
+    set_default CUDA true
+    set_default CHECKPOINT true
     ;;
 
   qplex14)
     [ "$#" -gt 0 ] && shift
-    set -- --env-id bus14 --alg QPLEX "$@"
+    set_default ENV_ID bus14
+    set_default ALG QPLEX
     ;;
 
   lagrmappo14)
     [ "$#" -gt 0 ] && shift
-    set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 1 "$@"
+    set_default ENV_ID bus14
+    set_default ALG LAGRMAPPO
+    set_default CONSTRAINTS_TYPE 1
     ;;
 
   table5_mappo14)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-40}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-true}"
-    CHECKPOINT="${CHECKPOINT:-true}"
-    set -- --env-id bus14 --alg MAPPO --use-heuristic false \
-      --track true \
-      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
-      --gamma 0.99 --max-grad-norm 10 \
-      --update-epochs 80 --n-minibatches 4 \
-      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 "$@"
+    set_fast_table5_runtime
+    set_table5_mappo
     ;;
   table5_qplex14)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-40}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-true}"
-    CHECKPOINT="${CHECKPOINT:-true}"
-    set -- --env-id bus14 --alg QPLEX --use-heuristic false \
-      --track true \
-      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
-      --gamma 0.99 --train-freq 100 --tg-qnet-freq 2500 \
-      --buffer-size 1000000 --batch-size 128 --lr 3e-5 --eps-decay-frac 0.5 "$@"
+    set_fast_table5_runtime
+    set_table5_qplex
     ;;
   table5_lagrmappo14_l)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-40}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-true}"
-    CHECKPOINT="${CHECKPOINT:-true}"
-    set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 1 --use-heuristic false \
-      --track true \
-      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
-      --gamma 0.99 --max-grad-norm 10 \
-      --update-epochs 80 --n-minibatches 4 \
-      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 \
-      --cost-threshold 0 --lag-mul 0.0 --lag-lr 0.05 "$@"
+    set_fast_table5_runtime
+    set_table5_lagrmappo 1 0
     ;;
   table5_lagrmappo14_o)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-40}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-true}"
-    CHECKPOINT="${CHECKPOINT:-true}"
-    set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 2 --use-heuristic false \
-      --track true \
-      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
-      --gamma 0.99 --max-grad-norm 10 \
-      --update-epochs 80 --n-minibatches 4 \
-      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 \
-      --cost-threshold 50 --lag-mul 0.0 --lag-lr 0.05 "$@"
+    set_fast_table5_runtime
+    set_table5_lagrmappo 2 50
     ;;
   table5_real_mappo14)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-10}"
-    N_STEPS="${N_STEPS:-2000}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-false}"
-    CHECKPOINT="${CHECKPOINT:-true}"
-    set -- --env-id bus14 --alg MAPPO --use-heuristic false \
-      --track true \
-      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
-      --gamma 0.99 --max-grad-norm 10 \
-      --update-epochs 80 --n-minibatches 4 \
-      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 "$@"
+    set_real_table5_runtime
+    set_table5_mappo
     ;;
   table5_real_qplex14)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-10}"
-    N_STEPS="${N_STEPS:-2000}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-false}"
-    CHECKPOINT="${CHECKPOINT:-true}"
-    set -- --env-id bus14 --alg QPLEX --use-heuristic false \
-      --track true \
-      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
-      --gamma 0.99 --train-freq 100 --tg-qnet-freq 2500 \
-      --buffer-size 1000000 --batch-size 128 --lr 3e-5 --eps-decay-frac 0.5 "$@"
+    set_real_table5_runtime
+    set_table5_qplex
     ;;
   table5_real_lagrmappo14_l)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-10}"
-    N_STEPS="${N_STEPS:-2000}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-false}"
-    CHECKPOINT="${CHECKPOINT:-true}"
-    set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 1 --use-heuristic false \
-      --track true \
-      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
-      --gamma 0.99 --max-grad-norm 10 \
-      --update-epochs 80 --n-minibatches 4 \
-      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 \
-      --cost-threshold 0 --lag-mul 0.0 --lag-lr 0.05 "$@"
+    set_real_table5_runtime
+    set_table5_lagrmappo 1 0
     ;;
   table5_real_lagrmappo14_o)
     [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-10}"
-    N_STEPS="${N_STEPS:-2000}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
-    CUDA="${CUDA:-false}"
-    CHECKPOINT="${CHECKPOINT:-true}"
-    set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 2 --use-heuristic false \
-      --track true \
-      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
-      --gamma 0.99 --max-grad-norm 10 \
-      --update-epochs 80 --n-minibatches 4 \
-      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 \
-      --cost-threshold 50 --lag-mul 0.0 --lag-lr 0.05 "$@"
+    set_real_table5_runtime
+    set_table5_lagrmappo 2 50
     ;;
 esac
 
-N_ENVS="${N_ENVS:-${SLURM_CPUS_PER_TASK:-40}}"
-ROLLOUT_BATCH="${ROLLOUT_BATCH:-20800}"
+set_default ENV_ID bus14
+set_default ALG MAPPO
+set_default N_ENVS "${SLURM_CPUS_PER_TASK:-40}"
+set_default ROLLOUT_BATCH 20800
 N_STEPS="${N_STEPS:-$(( ((ROLLOUT_BATCH + N_ENVS * N_ENVS - 1) / (N_ENVS * N_ENVS)) * N_ENVS ))}"
-EVAL_FREQ="${EVAL_FREQ:-$((N_ENVS * 500))}"
-PY_TIME_LIMIT="${PY_TIME_LIMIT:-120}"
-CUDA="${CUDA:-true}"
-CHECKPOINT="${CHECKPOINT:-true}"
+set_default EVAL_FREQ "$((N_ENVS * 500))"
+set_default PY_TIME_LIMIT 120
+set_default CUDA true
+set_default CHECKPOINT true
+set_default N_THREADS 1
 
 has_cli_arg() {
   local flag="$1"
@@ -243,9 +238,9 @@ has_cli_arg() {
 
 if ! has_cli_arg "--seed" "$@"; then
   if [ -n "${SEED:-}" ]; then
-    set -- "$@" --seed "${SEED}"
+    :
   elif [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
-    set -- "$@" --seed "${SLURM_ARRAY_TASK_ID}"
+    SEED="${SLURM_ARRAY_TASK_ID}"
   fi
 fi
 
@@ -270,54 +265,56 @@ print_resource_summary() {
   echo "Step GPUs: ${SLURM_STEP_GPUS:-unset}"
   echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-unset}"
   echo "Time limit: ${SLURM_TIMELIMIT:-unset}"
-
-  if command -v scontrol >/dev/null 2>&1 && [ -n "${SLURM_JOB_ID:-}" ]; then
-    echo "scontrol job details:"
-    scontrol show job "${SLURM_JOB_ID}" || true
-  fi
-
-  if command -v nvidia-smi >/dev/null 2>&1; then
-    echo "GPU details:"
-    nvidia-smi --query-gpu=index,name,uuid,memory.total,memory.free,driver_version --format=csv || true
-  fi
-
-  if command -v free >/dev/null 2>&1; then
-    echo "Node memory:"
-    free -h || true
-  fi
-
-  if command -v lscpu >/dev/null 2>&1; then
-    echo "CPU summary:"
-    lscpu | grep -E '^(Architecture|CPU\\(s\\)|Thread\\(s\\) per core|Core\\(s\\) per socket|Socket\\(s\\)|Model name|NUMA node\\(s\\)):' || true
-  fi
   echo "============================================"
+}
+
+add_arg() {
+  local flag="$1"
+  local value="${2:-}"
+  if [ -n "${value}" ]; then
+    ARGS+=("${flag}" "${value}")
+  fi
 }
 
 ARGS=(
   --cuda "${CUDA}"
   --checkpoint "${CHECKPOINT}"
-  --n-threads 1
+  --n-threads "${N_THREADS}"
   --n-envs "${N_ENVS}"
   --n-steps "${N_STEPS}"
   --eval-freq "${EVAL_FREQ}"
   --time-limit "${PY_TIME_LIMIT}"
-  "$@"
 )
+add_arg --env-id "${ENV_ID}"
+add_arg --alg "${ALG}"
+add_arg --constraints-type "${CONSTRAINTS_TYPE:-}"
+add_arg --use-heuristic "${USE_HEURISTIC:-}"
+add_arg --track "${TRACK:-}"
+add_arg --total-timesteps "${TOTAL_TIMESTEPS:-}"
+add_arg --gamma "${GAMMA:-}"
+add_arg --max-grad-norm "${MAX_GRAD_NORM:-}"
+add_arg --update-epochs "${UPDATE_EPOCHS:-}"
+add_arg --n-minibatches "${N_MINIBATCHES:-}"
+add_arg --actor-lr "${ACTOR_LR:-}"
+add_arg --critic-lr "${CRITIC_LR:-}"
+add_arg --clip-coef "${CLIP_COEF:-}"
+add_arg --train-freq "${TRAIN_FREQ:-}"
+add_arg --tg-qnet-freq "${TG_QNET_FREQ:-}"
+add_arg --buffer-size "${BUFFER_SIZE:-}"
+add_arg --batch-size "${BATCH_SIZE:-}"
+add_arg --lr "${LR:-}"
+add_arg --eps-decay-frac "${EPS_DECAY_FRAC:-}"
+add_arg --cost-threshold "${COST_THRESHOLD:-}"
+add_arg --lag-mul "${LAG_MUL:-}"
+add_arg --lag-lr "${LAG_LR:-}"
+if ! has_cli_arg "--seed" "$@"; then
+  add_arg --seed "${SEED:-}"
+fi
+ARGS+=("$@")
 
 mkdir -p "${PROJECT_DIR}/run_jobs"
 cd "${PROJECT_DIR}"
-
-if [ -d "${VENV_PATH}" ]; then
-  source "${VENV_PATH}/bin/activate"
-elif command -v conda >/dev/null 2>&1; then
-  CONDA_BASE="$(conda info --base)"
-  source "${CONDA_BASE}/etc/profile.d/conda.sh"
-  conda activate "${CONDA_ENV_NAME}"
-else
-  echo "No virtualenv found at ${VENV_PATH}, and conda is not available." >&2
-  echo "Set VENV_PATH or CONDA_ENV_NAME before submitting the job." >&2
-  exit 1
-fi
+source "${VENV_PATH}/bin/activate"
 
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
