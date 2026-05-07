@@ -17,8 +17,9 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'EOF'
 Usage: sbatch run_jobs/job.sh [preset] [main.py args...]
 
-Presets: mappo14, mappo14_fast, mappo14_fast_noheuristic, qplex14, lagrmappo14
+Presets: mappo14, mappo14_fast_noheuristic, qplex14, lagrmappo14
         table5_mappo14, table5_qplex14, table5_lagrmappo14_l, table5_lagrmappo14_o
+        table5_real_mappo14, table5_real_qplex14, table5_real_lagrmappo14_l, table5_real_lagrmappo14_o
 
 Examples:
   Local smoke test:
@@ -38,12 +39,19 @@ Examples:
   sbatch run_jobs/job.sh mappo14_fast_noheuristic --seed 0
     python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --use-heuristic false --seed 0
 
-  Table 5 reproduction presets use paper hyperparameters for bus14 topology.
+  Fast Table 5-style presets use paper hyperparameters with 40 parallel envs.
   Run one seed-0 job:
     sbatch run_jobs/job.sh table5_mappo14 --seed 0
     sbatch run_jobs/job.sh table5_qplex14 --seed 0
     sbatch run_jobs/job.sh table5_lagrmappo14_l --seed 0
     sbatch run_jobs/job.sh table5_lagrmappo14_o --seed 0
+
+  Real Table 5 presets use paper hyperparameters with 10 parallel envs and 2000 rollout steps.
+  Run one seed-0 job:
+    sbatch run_jobs/job.sh table5_real_mappo14 --seed 0
+    sbatch run_jobs/job.sh table5_real_qplex14 --seed 0
+    sbatch run_jobs/job.sh table5_real_lagrmappo14_l --seed 0
+    sbatch run_jobs/job.sh table5_real_lagrmappo14_o --seed 0
 
 Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED
 EOF
@@ -138,6 +146,71 @@ case "${1:-mappo14}" in
     EVAL_FREQ="${EVAL_FREQ:-20000}"
     PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
     CUDA="${CUDA:-true}"
+    CHECKPOINT="${CHECKPOINT:-true}"
+    set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 2 --use-heuristic false \
+      --track true \
+      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
+      --gamma 0.99 --max-grad-norm 10 \
+      --update-epochs 80 --n-minibatches 4 \
+      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 \
+      --cost-threshold 50 --lag-mul 0.0 --lag-lr 0.05 "$@"
+    ;;
+  table5_real_mappo14)
+    [ "$#" -gt 0 ] && shift
+    N_ENVS="${N_ENVS:-10}"
+    N_STEPS="${N_STEPS:-2000}"
+    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+    CUDA="${CUDA:-false}"
+    CHECKPOINT="${CHECKPOINT:-true}"
+    set -- --env-id bus14 --alg MAPPO --use-heuristic false \
+      --track true \
+      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
+      --gamma 0.99 --max-grad-norm 10 \
+      --update-epochs 80 --n-minibatches 4 \
+      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 "$@"
+    ;;
+  table5_real_qplex14)
+    [ "$#" -gt 0 ] && shift
+    N_ENVS="${N_ENVS:-10}"
+    N_STEPS="${N_STEPS:-2000}"
+    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+    CUDA="${CUDA:-false}"
+    CHECKPOINT="${CHECKPOINT:-true}"
+    set -- --env-id bus14 --alg QPLEX --use-heuristic false \
+      --track true \
+      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
+      --gamma 0.99 --train-freq 100 --tg-qnet-freq 2500 \
+      --buffer-size 1000000 --batch-size 128 --lr 3e-5 --eps-decay-frac 0.5 "$@"
+    ;;
+  table5_real_lagrmappo14_l)
+    [ "$#" -gt 0 ] && shift
+    N_ENVS="${N_ENVS:-10}"
+    N_STEPS="${N_STEPS:-2000}"
+    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+    CUDA="${CUDA:-false}"
+    CHECKPOINT="${CHECKPOINT:-true}"
+    set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 1 --use-heuristic false \
+      --track true \
+      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
+      --gamma 0.99 --max-grad-norm 10 \
+      --update-epochs 80 --n-minibatches 4 \
+      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 \
+      --cost-threshold 0 --lag-mul 0.0 --lag-lr 0.05 "$@"
+    ;;
+  table5_real_lagrmappo14_o)
+    [ "$#" -gt 0 ] && shift
+    N_ENVS="${N_ENVS:-10}"
+    N_STEPS="${N_STEPS:-2000}"
+    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+    CUDA="${CUDA:-false}"
     CHECKPOINT="${CHECKPOINT:-true}"
     set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 2 --use-heuristic false \
       --track true \
