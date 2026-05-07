@@ -34,20 +34,16 @@ Examples:
   sbatch run_jobs/job.sh --env-id bus14 --alg MAPPO --seed 0
     python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 520 --eval-freq 20000 --time-limit 110 --env-id bus14 --alg MAPPO --seed 0
 
-  Speed benchmark:
-  sbatch run_jobs/job.sh mappo14_fast --seed 0
-    python main.py --cuda true --checkpoint false --n-threads 1 --n-envs 40 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --seed 0
-
   Heuristic bottleneck benchmark:
   sbatch run_jobs/job.sh mappo14_fast_noheuristic --seed 0
     python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --use-heuristic false --seed 0
 
   Table 5 reproduction presets use paper hyperparameters for bus14 topology.
-  Run all five paper seeds with a Slurm array:
-    sbatch --array=0-4 run_jobs/job.sh table5_mappo14
-    sbatch --array=0-4 run_jobs/job.sh table5_qplex14
-    sbatch --array=0-4 run_jobs/job.sh table5_lagrmappo14_l
-    sbatch --array=0-4 run_jobs/job.sh table5_lagrmappo14_o
+  Run one seed-0 job:
+    sbatch run_jobs/job.sh table5_mappo14 --seed 0
+    sbatch run_jobs/job.sh table5_qplex14 --seed 0
+    sbatch run_jobs/job.sh table5_lagrmappo14_l --seed 0
+    sbatch run_jobs/job.sh table5_lagrmappo14_o --seed 0
 
 Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED
 EOF
@@ -68,16 +64,7 @@ case "${1:-mappo14}" in
     [ "$#" -gt 0 ] && shift
     set -- --env-id bus14 --alg MAPPO "$@"
     ;;
-  mappo14_fast)
-    [ "$#" -gt 0 ] && shift
-    N_ENVS="${N_ENVS:-40}"
-    ROLLOUT_BATCH="${ROLLOUT_BATCH:-4000}"
-    EVAL_FREQ="${EVAL_FREQ:-20000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-120}"
-    CUDA="${CUDA:-true}"
-    CHECKPOINT="${CHECKPOINT:-false}"
-    set -- --env-id bus14 --alg MAPPO --track false "$@"
-    ;;
+
   mappo14_fast_noheuristic)
     [ "$#" -gt 0 ] && shift
     N_ENVS="${N_ENVS:-40}"
@@ -88,14 +75,17 @@ case "${1:-mappo14}" in
     CHECKPOINT="${CHECKPOINT:-true}"
     set -- --env-id bus14 --alg MAPPO --track false --use-heuristic false "$@"
     ;;
+
   qplex14)
     [ "$#" -gt 0 ] && shift
     set -- --env-id bus14 --alg QPLEX "$@"
     ;;
+
   lagrmappo14)
     [ "$#" -gt 0 ] && shift
     set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 1 "$@"
     ;;
+
   table5_mappo14)
     [ "$#" -gt 0 ] && shift
     N_ENVS="${N_ENVS:-10}"
