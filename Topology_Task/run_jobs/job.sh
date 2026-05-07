@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=32G
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --gres=gpu:1
@@ -18,6 +18,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 Usage: sbatch run_jobs/job.sh [preset] [main.py args...]
 
 Presets: mappo14, mappo14_fast, mappo14_fast_noheuristic, qplex14, lagrmappo14
+        table5_mappo14, table5_qplex14, table5_lagrmappo14_l, table5_lagrmappo14_o
 
 Examples:
   Local smoke test:
@@ -35,13 +36,20 @@ Examples:
 
   Speed benchmark:
   sbatch run_jobs/job.sh mappo14_fast --seed 0
-    python main.py --cuda true --checkpoint false --n-threads 1 --n-envs 40 --n-steps 120 --eval-freq 100000000 --time-limit 20 --env-id bus14 --alg MAPPO --track false --seed 0
+    python main.py --cuda true --checkpoint false --n-threads 1 --n-envs 40 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --seed 0
 
   Heuristic bottleneck benchmark:
   sbatch run_jobs/job.sh mappo14_fast_noheuristic --seed 0
-    python main.py --cuda true --checkpoint false --n-threads 1 --n-envs 40 --n-steps 120 --eval-freq 100000000 --time-limit 20 --env-id bus14 --alg MAPPO --track false --use-heuristic false --seed 0
+    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --use-heuristic false --seed 0
 
-Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT
+  Table 5 reproduction presets use paper hyperparameters for bus14 topology.
+  Run all five paper seeds with a Slurm array:
+    sbatch --array=0-4 run_jobs/job.sh table5_mappo14
+    sbatch --array=0-4 run_jobs/job.sh table5_qplex14
+    sbatch --array=0-4 run_jobs/job.sh table5_lagrmappo14_l
+    sbatch --array=0-4 run_jobs/job.sh table5_lagrmappo14_o
+
+Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED
 EOF
   exit 0
 fi
@@ -64,8 +72,8 @@ case "${1:-mappo14}" in
     [ "$#" -gt 0 ] && shift
     N_ENVS="${N_ENVS:-40}"
     ROLLOUT_BATCH="${ROLLOUT_BATCH:-4000}"
-    EVAL_FREQ="${EVAL_FREQ:-100000000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-20}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-120}"
     CUDA="${CUDA:-true}"
     CHECKPOINT="${CHECKPOINT:-false}"
     set -- --env-id bus14 --alg MAPPO --track false "$@"
@@ -74,10 +82,10 @@ case "${1:-mappo14}" in
     [ "$#" -gt 0 ] && shift
     N_ENVS="${N_ENVS:-40}"
     ROLLOUT_BATCH="${ROLLOUT_BATCH:-4000}"
-    EVAL_FREQ="${EVAL_FREQ:-100000000}"
-    PY_TIME_LIMIT="${PY_TIME_LIMIT:-20}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-120}"
     CUDA="${CUDA:-true}"
-    CHECKPOINT="${CHECKPOINT:-false}"
+    CHECKPOINT="${CHECKPOINT:-true}"
     set -- --env-id bus14 --alg MAPPO --track false --use-heuristic false "$@"
     ;;
   qplex14)
@@ -88,15 +96,91 @@ case "${1:-mappo14}" in
     [ "$#" -gt 0 ] && shift
     set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 1 "$@"
     ;;
+  table5_mappo14)
+    [ "$#" -gt 0 ] && shift
+    N_ENVS="${N_ENVS:-10}"
+    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+    CUDA="${CUDA:-false}"
+    CHECKPOINT="${CHECKPOINT:-true}"
+    set -- --env-id bus14 --alg MAPPO --use-heuristic false \
+      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
+      --gamma 0.99 --max-grad-norm 10 \
+      --update-epochs 80 --n-minibatches 4 \
+      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 "$@"
+    ;;
+  table5_qplex14)
+    [ "$#" -gt 0 ] && shift
+    N_ENVS="${N_ENVS:-10}"
+    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+    CUDA="${CUDA:-false}"
+    CHECKPOINT="${CHECKPOINT:-true}"
+    set -- --env-id bus14 --alg QPLEX --use-heuristic false \
+      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
+      --gamma 0.99 --train-freq 100 --tg-qnet-freq 2500 \
+      --buffer-size 1000000 --batch-size 128 --lr 3e-5 --eps-decay-frac 0.5 "$@"
+    ;;
+  table5_lagrmappo14_l)
+    [ "$#" -gt 0 ] && shift
+    N_ENVS="${N_ENVS:-10}"
+    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+    CUDA="${CUDA:-false}"
+    CHECKPOINT="${CHECKPOINT:-true}"
+    set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 1 --use-heuristic false \
+      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
+      --gamma 0.99 --max-grad-norm 10 \
+      --update-epochs 80 --n-minibatches 4 \
+      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 \
+      --cost-threshold 0 --lag-mul 0.0 --lag-lr 0.05 "$@"
+    ;;
+  table5_lagrmappo14_o)
+    [ "$#" -gt 0 ] && shift
+    N_ENVS="${N_ENVS:-10}"
+    ROLLOUT_BATCH="${ROLLOUT_BATCH:-20000}"
+    EVAL_FREQ="${EVAL_FREQ:-20000}"
+    PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+    CUDA="${CUDA:-false}"
+    CHECKPOINT="${CHECKPOINT:-true}"
+    set -- --env-id bus14 --alg LAGRMAPPO --constraints-type 2 --use-heuristic false \
+      --total-timesteps "${TOTAL_TIMESTEPS:-25000000}" \
+      --gamma 0.99 --max-grad-norm 10 \
+      --update-epochs 80 --n-minibatches 4 \
+      --actor-lr 3e-5 --critic-lr 3e-5 --clip-coef 0.2 \
+      --cost-threshold 50 --lag-mul 0.0 --lag-lr 0.05 "$@"
+    ;;
 esac
 
 N_ENVS="${N_ENVS:-${SLURM_CPUS_PER_TASK:-40}}"
 ROLLOUT_BATCH="${ROLLOUT_BATCH:-20800}"
 N_STEPS="${N_STEPS:-$(( ((ROLLOUT_BATCH + N_ENVS * N_ENVS - 1) / (N_ENVS * N_ENVS)) * N_ENVS ))}"
 EVAL_FREQ="${EVAL_FREQ:-$((N_ENVS * 500))}"
-PY_TIME_LIMIT="${PY_TIME_LIMIT:-110}"
+PY_TIME_LIMIT="${PY_TIME_LIMIT:-120}"
 CUDA="${CUDA:-true}"
 CHECKPOINT="${CHECKPOINT:-true}"
+
+has_cli_arg() {
+  local flag="$1"
+  shift
+  for arg in "$@"; do
+    case "${arg}" in
+      "${flag}"|"${flag}="*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+if ! has_cli_arg "--seed" "$@"; then
+  if [ -n "${SEED:-}" ]; then
+    set -- "$@" --seed "${SEED}"
+  elif [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
+    set -- "$@" --seed "${SLURM_ARRAY_TASK_ID}"
+  fi
+fi
 
 print_resource_summary() {
   echo "========== SLURM resource summary =========="
