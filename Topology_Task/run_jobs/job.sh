@@ -53,7 +53,7 @@ Examples:
     sbatch run_jobs/job.sh table5_real_lagrmappo14_l --seed 0
     sbatch run_jobs/job.sh table5_real_lagrmappo14_o --seed 0
 
-Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED
+Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, WANDB_ENTITY, WANDB_PROJECT
 EOF
   exit 0
 fi
@@ -224,6 +224,9 @@ set_default PY_TIME_LIMIT 120
 set_default CUDA true
 set_default CHECKPOINT true
 set_default N_THREADS 1
+set_default TRACK true
+set_default WANDB_ENTITY corentin-plumet-epfl
+set_default WANDB_PROJECT marl2grid
 
 has_cli_arg() {
   local flag="$1"
@@ -290,6 +293,8 @@ add_arg --alg "${ALG}"
 add_arg --constraints-type "${CONSTRAINTS_TYPE:-}"
 add_arg --use-heuristic "${USE_HEURISTIC:-}"
 add_arg --track "${TRACK:-}"
+add_arg --wandb-entity "${WANDB_ENTITY:-}"
+add_arg --wandb-project "${WANDB_PROJECT:-}"
 add_arg --total-timesteps "${TOTAL_TIMESTEPS:-}"
 add_arg --gamma "${GAMMA:-}"
 add_arg --max-grad-norm "${MAX_GRAD_NORM:-}"
