@@ -118,11 +118,11 @@ set_table5_lagrmappo() {
 }
 
 set_fast_table5_runtime() {
-  set_default N_THREADS 128
+  set_default N_THREADS 1
   set_default N_ENVS 40 #40 #120
   set_default N_STEPS 520 #520 #480
-  set_default ROLLOUT_BATCH 20800 #20000 #57600
-  set_default EVAL_FREQ 20800 #20000 #57600
+  set_default ROLLOUT_BATCH "$((N_ENVS * N_STEPS))"
+  set_default EVAL_FREQ "$((N_ENVS * N_STEPS))"
   set_default PY_TIME_LIMIT 310
   set_default CUDA true
   set_default CHECKPOINT true
