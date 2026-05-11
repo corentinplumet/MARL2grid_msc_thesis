@@ -5,8 +5,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
-#SBATCH --mem=32G
-#SBATCH --time=02:00:00
+#SBATCH --mem=64G
+#SBATCH --time=00:05:00
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --gres=gpu:1
@@ -82,10 +82,11 @@ set_table5_common() {
   set_default TRACK true
   set_default TOTAL_TIMESTEPS 60000000
   set_default GAMMA 0.99
+  set_default WANDB_ENTITY corentin-plumet-epfl
+  set_default WANDB_PROJECT marl2grid
 }
 
 set_table5_mappo() {
-  set_table5_common MAPPO
   set_default MAX_GRAD_NORM 10
   set_default UPDATE_EPOCHS 80
   set_default N_MINIBATCHES 4
@@ -95,7 +96,6 @@ set_table5_mappo() {
 }
 
 set_table5_qplex() {
-  set_table5_common QPLEX
   set_default TRAIN_FREQ 100
   set_default TG_QNET_FREQ 2500
   set_default BUFFER_SIZE 1000000
@@ -105,7 +105,6 @@ set_table5_qplex() {
 }
 
 set_table5_lagrmappo() {
-  set_table5_common LAGRMAPPO
   set_default CONSTRAINTS_TYPE "$1"
   set_default MAX_GRAD_NORM 10
   set_default UPDATE_EPOCHS 80
@@ -119,21 +118,23 @@ set_table5_lagrmappo() {
 }
 
 set_fast_table5_runtime() {
-  set_default N_ENVS 40
-  set_default N_STEPS 520
-  set_default ROLLOUT_BATCH 20000
-  set_default EVAL_FREQ 20000
-  set_default PY_TIME_LIMIT 110
+  set_default N_THREADS 128
+  set_default N_ENVS 40 #40 #120
+  set_default N_STEPS 520 #520 #480
+  set_default ROLLOUT_BATCH 20800 #20000 #57600
+  set_default EVAL_FREQ 20800 #20000 #57600
+  set_default PY_TIME_LIMIT 310
   set_default CUDA true
   set_default CHECKPOINT true
 }
 
 set_real_table5_runtime() {
+  set_default N_THREADS 1
   set_default N_ENVS 10
   set_default N_STEPS 2000
   set_default ROLLOUT_BATCH 20000
   set_default EVAL_FREQ 20000
-  set_default PY_TIME_LIMIT 110
+  set_default PY_TIME_LIMIT 115
   set_default CUDA false
   set_default CHECKPOINT true
 }
@@ -151,7 +152,7 @@ case "${1:-mappo14}" in
     set_default ALG MAPPO
     set_default USE_HEURISTIC false
     set_default TRACK false
-    set_default N_ENVS 40
+    set_default N_ENVS 5
     set_default ROLLOUT_BATCH 4000
     set_default EVAL_FREQ 20000
     set_default PY_TIME_LIMIT 120
@@ -174,59 +175,60 @@ case "${1:-mappo14}" in
 
   table5_mappo14)
     [ "$#" -gt 0 ] && shift
+    set_table5_common MAPPO
     set_fast_table5_runtime
     set_table5_mappo
     ;;
+
   table5_qplex14)
     [ "$#" -gt 0 ] && shift
+    set_table5_common QPLEX
     set_fast_table5_runtime
     set_table5_qplex
     ;;
+
   table5_lagrmappo14_l)
     [ "$#" -gt 0 ] && shift
+    set_table5_common LAGRMAPPO
     set_fast_table5_runtime
     set_table5_lagrmappo 1 0
     ;;
+
   table5_lagrmappo14_o)
     [ "$#" -gt 0 ] && shift
+    set_table5_common LAGRMAPPO
     set_fast_table5_runtime
     set_table5_lagrmappo 2 50
     ;;
+
   table5_real_mappo14)
     [ "$#" -gt 0 ] && shift
+    set_table5_common MAPPO
     set_real_table5_runtime
     set_table5_mappo
     ;;
+
   table5_real_qplex14)
     [ "$#" -gt 0 ] && shift
+    set_table5_common QPLEX
     set_real_table5_runtime
     set_table5_qplex
     ;;
+
   table5_real_lagrmappo14_l)
     [ "$#" -gt 0 ] && shift
+    set_table5_common LAGRMAPPO
     set_real_table5_runtime
     set_table5_lagrmappo 1 0
     ;;
+
   table5_real_lagrmappo14_o)
     [ "$#" -gt 0 ] && shift
+    set_table5_common LAGRMAPPO
     set_real_table5_runtime
     set_table5_lagrmappo 2 50
     ;;
 esac
-
-set_default ENV_ID bus14
-set_default ALG MAPPO
-set_default N_ENVS "${SLURM_CPUS_PER_TASK:-40}"
-set_default ROLLOUT_BATCH 20800
-N_STEPS="${N_STEPS:-$(( ((ROLLOUT_BATCH + N_ENVS * N_ENVS - 1) / (N_ENVS * N_ENVS)) * N_ENVS ))}"
-set_default EVAL_FREQ "$((N_ENVS * 500))"
-set_default PY_TIME_LIMIT 120
-set_default CUDA true
-set_default CHECKPOINT true
-set_default N_THREADS 1
-set_default TRACK true
-set_default WANDB_ENTITY corentin-plumet-epfl
-set_default WANDB_PROJECT marl2grid
 
 has_cli_arg() {
   local flag="$1"
@@ -246,6 +248,18 @@ if ! has_cli_arg "--seed" "$@"; then
     SEED="${SLURM_ARRAY_TASK_ID}"
   fi
 fi
+
+get_slurm_time_limit() {
+  if [ -n "${SLURM_JOB_ID:-}" ] && command -v squeue >/dev/null 2>&1; then
+    local limit
+    limit="$(squeue -h -j "${SLURM_JOB_ID}" -o "%l" 2>/dev/null || true)"
+    if [ -n "${limit}" ]; then
+      echo "${limit}"
+      return
+    fi
+  fi
+  echo "${SLURM_TIMELIMIT:-unset}"
+}
 
 print_resource_summary() {
   echo "========== SLURM resource summary =========="
@@ -267,7 +281,7 @@ print_resource_summary() {
   echo "Allocated GPU IDs: ${SLURM_JOB_GPUS:-unset}"
   echo "Step GPU IDs: ${SLURM_STEP_GPUS:-unset}"
   echo "CUDA visible device IDs: ${CUDA_VISIBLE_DEVICES:-unset}"
-  echo "Time limit: ${SLURM_TIMELIMIT:-unset}"
+  echo "Time limit: $(get_slurm_time_limit)"
   echo "============================================"
 }
 
