@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=32G
-#SBATCH --time=04:00:00
+#SBATCH --time=02:00:00
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --gres=gpu:1
@@ -120,7 +120,7 @@ set_table5_lagrmappo() {
 
 set_fast_table5_runtime() {
   set_default N_ENVS 40
-  set_default N_STEPS 500
+  set_default N_STEPS 520
   set_default ROLLOUT_BATCH 20000
   set_default EVAL_FREQ 20000
   set_default PY_TIME_LIMIT 110
@@ -263,12 +263,31 @@ print_resource_summary() {
   echo "CPUs on node: ${SLURM_CPUS_ON_NODE:-unset}"
   echo "Memory per node: ${SLURM_MEM_PER_NODE:-unset} MB"
   echo "Memory per CPU: ${SLURM_MEM_PER_CPU:-unset} MB"
-  echo "Requested GPUs: ${SLURM_GPUS:-unset}"
-  echo "Allocated job GPUs: ${SLURM_JOB_GPUS:-unset}"
-  echo "Step GPUs: ${SLURM_STEP_GPUS:-unset}"
-  echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-unset}"
+  echo "Requested GPU count: ${SLURM_GPUS:-unset}"
+  echo "Allocated GPU IDs: ${SLURM_JOB_GPUS:-unset}"
+  echo "Step GPU IDs: ${SLURM_STEP_GPUS:-unset}"
+  echo "CUDA visible device IDs: ${CUDA_VISIBLE_DEVICES:-unset}"
   echo "Time limit: ${SLURM_TIMELIMIT:-unset}"
   echo "============================================"
+}
+
+print_torch_cuda_summary() {
+  python - <<'PY'
+try:
+    import torch
+
+    print("========== PyTorch CUDA summary ==========")
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    print(f"CUDA device count visible to job: {torch.cuda.device_count()}")
+    if torch.cuda.is_available():
+        for idx in range(torch.cuda.device_count()):
+            print(f"CUDA device {idx}: {torch.cuda.get_device_name(idx)}")
+    print("==========================================")
+except Exception as exc:
+    print("========== PyTorch CUDA summary ==========")
+    print(f"Unable to query PyTorch CUDA state: {exc}")
+    print("==========================================")
+PY
 }
 
 add_arg() {
@@ -332,6 +351,7 @@ echo "Project dir: ${PROJECT_DIR}"
 echo "Started at: $(date)"
 print_resource_summary
 echo "Python: $(command -v python)"
+print_torch_cuda_summary
 echo "Vector envs: ${N_ENVS}, rollout steps: ${N_STEPS}, rollout batch: $((N_ENVS * N_STEPS))"
 echo "Python time limit: ${PY_TIME_LIMIT} minutes"
 echo "Command: python main.py ${ARGS[*]}"
