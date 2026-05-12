@@ -7,7 +7,7 @@
 ##PBS -P <your_nus_project_id>
 #PBS -N marl2grid_atlas
 #PBS -q parallel
-#PBS -l select=1:ncpus=20:mem=50gb
+#PBS -l select=1:ncpus=12:mem=10gb
 #PBS -l walltime=23:10:00
 #PBS -j oe
 #PBS -V
