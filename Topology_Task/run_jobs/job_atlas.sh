@@ -1,24 +1,23 @@
 #!/bin/bash
-# NUS Atlas SLURM launcher.
-# Add an Atlas-specific account or partition here if your allocation requires one.
-# Example:
-# #SBATCH --partition=gpu
-# #SBATCH --account=<your_atlas_project>
-#SBATCH --job-name=marl2grid_atlas
-#SBATCH --output=routput_jobs_atlas/job_out_%j.log
-#SBATCH --error=routput_jobs_atlas/job_err_%j.log
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=40
-#SBATCH --mem=128G
-#SBATCH --time=23:10:00
-#SBATCH --gres=gpu:1
+# NUS Atlas PBS Pro launcher.
+# Atlas uses PBS Pro/qsub rather than Slurm/sbatch.
+# If your allocation requires a project, pass it at submission time:
+#   qsub -P <your_nus_project_id> -- run_jobs/job_atlas.sh
+##PBS -P <your_nus_project_id>
+#PBS -N marl2grid_atlas
+#PBS -q volta_gpu
+#PBS -l select=1:ncpus=20:ngpus=1:mem=50gb
+#PBS -l walltime=23:10:00
+#PBS -j oe
+#PBS -V
 
 set -euo pipefail
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'EOF'
-Usage: sbatch run_jobs/job_atlas.sh [preset] [main.py args...]
+Usage:
+  qsub -P <project_id> -- run_jobs/job_atlas.sh [preset] [main.py args...]
+  qsub -P <project_id> -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
 
 Presets: mappo14, mappo14_fast_noheuristic, qplex14, lagrmappo14
         table5_mappo14, table5_mappo14_fullobs, table5_qplex14, table5_lagrmappo14_l, table5_lagrmappo14_o
@@ -29,43 +28,47 @@ Examples:
     python main.py --cuda false --checkpoint false --n-threads 1 --n-envs 1 --n-steps 5 --eval-freq 1000000 --time-limit 2 --total-timesteps 20 --env-id bus14 --alg MAPPO --seed 0
 
   Cluster examples:
-  sbatch run_jobs/job_atlas.sh
-    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 520 --eval-freq 20000 --time-limit 110 --env-id bus14 --alg MAPPO
+  qsub -P <project_id> -- run_jobs/job_atlas.sh
+    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg MAPPO
 
-  sbatch run_jobs/job_atlas.sh qplex14 --seed 2 --track true
-    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 520 --eval-freq 20000 --time-limit 110 --env-id bus14 --alg QPLEX --seed 2 --track true
+  qsub -P <project_id> -- run_jobs/job_atlas.sh qplex14 --seed 2 --track true
+    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg QPLEX --seed 2 --track true
 
-  sbatch run_jobs/job_atlas.sh --env-id bus14 --alg MAPPO --seed 0
-    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 520 --eval-freq 20000 --time-limit 110 --env-id bus14 --alg MAPPO --seed 0
+  qsub -P <project_id> -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
+    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg MAPPO --seed 0
 
   Heuristic bottleneck benchmark:
-  sbatch run_jobs/job_atlas.sh mappo14_fast_noheuristic --seed 0
-    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --use-heuristic false --seed 0
+  qsub -P <project_id> -- run_jobs/job_atlas.sh mappo14_fast_noheuristic --seed 0
+    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 5 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --use-heuristic false --seed 0
 
-  Fast Table 5-style presets use paper hyperparameters with 40 parallel envs.
+  Fast Table 5-style presets use paper hyperparameters with many parallel envs.
   Run one seed-0 job:
-    sbatch run_jobs/job_atlas.sh table5_mappo14 --seed 0
-    sbatch run_jobs/job_atlas.sh table5_mappo14_fullobs --seed 0
-    sbatch run_jobs/job_atlas.sh table5_qplex14 --seed 0
-    sbatch run_jobs/job_atlas.sh table5_lagrmappo14_l --seed 0
-    sbatch run_jobs/job_atlas.sh table5_lagrmappo14_o --seed 0
+    qsub -P <project_id> -- run_jobs/job_atlas.sh table5_mappo14 --seed 0
+    qsub -P <project_id> -- run_jobs/job_atlas.sh table5_mappo14_fullobs --seed 0
+    qsub -P <project_id> -- run_jobs/job_atlas.sh table5_qplex14 --seed 0
+    qsub -P <project_id> -- run_jobs/job_atlas.sh table5_lagrmappo14_l --seed 0
+    qsub -P <project_id> -- run_jobs/job_atlas.sh table5_lagrmappo14_o --seed 0
 
   Real Table 5 presets use paper hyperparameters with 10 parallel envs and 2000 rollout steps.
   Run one seed-0 job:
-    sbatch run_jobs/job_atlas.sh table5_real_mappo14 --seed 0
-    sbatch run_jobs/job_atlas.sh table5_real_qplex14 --seed 0
-    sbatch run_jobs/job_atlas.sh table5_real_lagrmappo14_l --seed 0
-    sbatch run_jobs/job_atlas.sh table5_real_lagrmappo14_o --seed 0
+    qsub -P <project_id> -- run_jobs/job_atlas.sh table5_real_mappo14 --seed 0
+    qsub -P <project_id> -- run_jobs/job_atlas.sh table5_real_qplex14 --seed 0
+    qsub -P <project_id> -- run_jobs/job_atlas.sh table5_real_lagrmappo14_l --seed 0
+    qsub -P <project_id> -- run_jobs/job_atlas.sh table5_real_lagrmappo14_o --seed 0
 
-Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, DECENTRALIZED, WANDB_ENTITY, WANDB_PROJECT
+Environment overrides: PRESET, PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, ATLAS_EBENV_MODULE, LOAD_ATLAS_EBENV, DRY_RUN, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, DECENTRALIZED, WANDB_ENTITY, WANDB_PROJECT
 EOF
   exit 0
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}}"
+SCRIPT_PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SUBMIT_DIR="${PBS_O_WORKDIR:-${PWD}}"
+PROJECT_DIR="${PROJECT_DIR:-${SUBMIT_DIR}}"
 if [ "$(basename "${PROJECT_DIR}")" = "run_jobs" ]; then
   PROJECT_DIR="$(cd "${PROJECT_DIR}/.." && pwd)"
+elif [ ! -f "${PROJECT_DIR}/main.py" ]; then
+  PROJECT_DIR="${SCRIPT_PROJECT_DIR}"
 fi
 
 VENV_PATH="${VENV_PATH:-${PROJECT_DIR}/.venv}"
@@ -143,20 +146,35 @@ set_real_table5_runtime() {
   set_default CHECKPOINT true
 }
 
-case "${1:-mappo14}" in
+PRESET_NAME="${PRESET:-mappo14}"
+if [ "$#" -gt 0 ]; then
+  case "$1" in
+    mappo14|mappo14_fast_noheuristic|qplex14|lagrmappo14|table5_mappo14|table5_mappo14_fullobs|table5_qplex14|table5_lagrmappo14_l|table5_lagrmappo14_o|table5_real_mappo14|table5_real_qplex14|table5_real_lagrmappo14_l|table5_real_lagrmappo14_o)
+      PRESET_NAME="$1"
+      shift
+      ;;
+    --*)
+      ;;
+    *)
+      echo "Unknown preset '$1'. Run: bash run_jobs/job_atlas.sh --help" >&2
+      exit 2
+      ;;
+  esac
+fi
+
+case "${PRESET_NAME}" in
   mappo14)
-    [ "$#" -gt 0 ] && shift
     set_default ENV_ID bus14
     set_default ALG MAPPO
     ;;
 
   mappo14_fast_noheuristic)
-    [ "$#" -gt 0 ] && shift
     set_default ENV_ID bus14
     set_default ALG MAPPO
     set_default USE_HEURISTIC false
     set_default TRACK false
     set_default N_ENVS 5
+    set_default N_STEPS 120
     set_default ROLLOUT_BATCH 4000
     set_default EVAL_FREQ 20000
     set_default PY_TIME_LIMIT 120
@@ -165,27 +183,23 @@ case "${1:-mappo14}" in
     ;;
 
   qplex14)
-    [ "$#" -gt 0 ] && shift
     set_default ENV_ID bus14
     set_default ALG QPLEX
     ;;
 
   lagrmappo14)
-    [ "$#" -gt 0 ] && shift
     set_default ENV_ID bus14
     set_default ALG LAGRMAPPO
     set_default CONSTRAINTS_TYPE 1
     ;;
 
   table5_mappo14)
-    [ "$#" -gt 0 ] && shift
     set_table5_common MAPPO
     set_fast_table5_runtime
     set_table5_mappo
     ;;
 
   table5_mappo14_fullobs)
-    [ "$#" -gt 0 ] && shift
     set_table5_common MAPPO
     set_fast_table5_runtime
     set_table5_mappo
@@ -193,54 +207,56 @@ case "${1:-mappo14}" in
     ;;
 
   table5_qplex14)
-    [ "$#" -gt 0 ] && shift
     set_table5_common QPLEX
     set_fast_table5_runtime
     set_table5_qplex
     ;;
 
   table5_lagrmappo14_l)
-    [ "$#" -gt 0 ] && shift
     set_table5_common LAGRMAPPO
     set_fast_table5_runtime
     set_table5_lagrmappo 1 0
     ;;
 
   table5_lagrmappo14_o)
-    [ "$#" -gt 0 ] && shift
     set_table5_common LAGRMAPPO
     set_fast_table5_runtime
     set_table5_lagrmappo 2 50
     ;;
 
   table5_real_mappo14)
-    [ "$#" -gt 0 ] && shift
     set_table5_common MAPPO
     set_real_table5_runtime
     set_table5_mappo
     ;;
 
   table5_real_qplex14)
-    [ "$#" -gt 0 ] && shift
     set_table5_common QPLEX
     set_real_table5_runtime
     set_table5_qplex
     ;;
 
   table5_real_lagrmappo14_l)
-    [ "$#" -gt 0 ] && shift
     set_table5_common LAGRMAPPO
     set_real_table5_runtime
     set_table5_lagrmappo 1 0
     ;;
 
   table5_real_lagrmappo14_o)
-    [ "$#" -gt 0 ] && shift
     set_table5_common LAGRMAPPO
     set_real_table5_runtime
     set_table5_lagrmappo 2 50
     ;;
 esac
+
+set_default N_THREADS 1
+set_default N_ENVS 20
+set_default N_STEPS 520
+set_default ROLLOUT_BATCH "$((N_ENVS * N_STEPS))"
+set_default EVAL_FREQ 20000
+set_default PY_TIME_LIMIT 1380
+set_default CUDA true
+set_default CHECKPOINT true
 
 has_cli_arg() {
   local flag="$1"
@@ -256,45 +272,49 @@ has_cli_arg() {
 if ! has_cli_arg "--seed" "$@"; then
   if [ -n "${SEED:-}" ]; then
     :
-  elif [ -n "${SLURM_ARRAY_TASK_ID:-}" ]; then
-    SEED="${SLURM_ARRAY_TASK_ID}"
+  elif [ -n "${PBS_ARRAY_INDEX:-}" ]; then
+    SEED="${PBS_ARRAY_INDEX}"
+  elif [ -n "${PBS_ARRAYID:-}" ]; then
+    SEED="${PBS_ARRAYID}"
   fi
 fi
 
-get_slurm_time_limit() {
-  if [ -n "${SLURM_JOB_ID:-}" ] && command -v squeue >/dev/null 2>&1; then
+get_pbs_walltime() {
+  if [ -n "${PBS_JOBID:-}" ] && command -v qstat >/dev/null 2>&1; then
     local limit
-    limit="$(squeue -h -j "${SLURM_JOB_ID}" -o "%l" 2>/dev/null || true)"
+    limit="$(qstat -f "${PBS_JOBID}" 2>/dev/null | awk -F'= ' '/Resource_List.walltime/ {print $2; exit}' || true)"
     if [ -n "${limit}" ]; then
       echo "${limit}"
       return
     fi
   fi
-  echo "${SLURM_TIMELIMIT:-unset}"
+  echo "unset"
 }
 
 print_resource_summary() {
-  echo "========== SLURM resource summary =========="
-  echo "Job id: ${SLURM_JOB_ID:-unset}"
-  echo "Job name: ${SLURM_JOB_NAME:-unset}"
-  echo "Account: ${SLURM_JOB_ACCOUNT:-unset}"
-  echo "Partition: ${SLURM_JOB_PARTITION:-unset}"
-  echo "QoS: ${SLURM_JOB_QOS:-unset}"
-  echo "Submit dir: ${SLURM_SUBMIT_DIR:-unset}"
-  echo "Node list: ${SLURM_JOB_NODELIST:-unset}"
+  local nodefile_slots="unset"
+  local node_list="unset"
+  if [ -n "${PBS_NODEFILE:-}" ] && [ -f "${PBS_NODEFILE}" ]; then
+    nodefile_slots="$(wc -l < "${PBS_NODEFILE}" | tr -d ' ')"
+    node_list="$(sort -u "${PBS_NODEFILE}" | tr '\n' ' ')"
+  fi
+
+  echo "========== PBS resource summary =========="
+  echo "Job id: ${PBS_JOBID:-unset}"
+  echo "Job name: ${PBS_JOBNAME:-unset}"
+  echo "Project: ${PBS_PROJECT:-unset}"
+  echo "Queue: ${PBS_QUEUE:-unset}"
+  echo "Submit dir: ${PBS_O_WORKDIR:-unset}"
   echo "Current host: $(hostname)"
-  echo "Nodes: ${SLURM_NNODES:-unset}"
-  echo "Tasks: ${SLURM_NTASKS:-unset}"
-  echo "CPUs per task: ${SLURM_CPUS_PER_TASK:-unset}"
-  echo "CPUs on node: ${SLURM_CPUS_ON_NODE:-unset}"
-  echo "Memory per node: ${SLURM_MEM_PER_NODE:-unset} MB"
-  echo "Memory per CPU: ${SLURM_MEM_PER_CPU:-unset} MB"
-  echo "Requested GPU count: ${SLURM_GPUS:-unset}"
-  echo "Allocated GPU IDs: ${SLURM_JOB_GPUS:-unset}"
-  echo "Step GPU IDs: ${SLURM_STEP_GPUS:-unset}"
+  echo "Node file: ${PBS_NODEFILE:-unset}"
+  echo "Node list: ${node_list}"
+  echo "Nodefile slots: ${nodefile_slots}"
+  echo "Requested ncpus: ${PBS_NCPUS:-unset}"
+  echo "Requested ngpus: ${PBS_NGPUS:-unset}"
+  echo "GPU file: ${PBS_GPUFILE:-unset}"
   echo "CUDA visible device IDs: ${CUDA_VISIBLE_DEVICES:-unset}"
-  echo "Time limit: $(get_slurm_time_limit)"
-  echo "============================================"
+  echo "Walltime limit: $(get_pbs_walltime)"
+  echo "========================================"
 }
 
 print_torch_cuda_summary() {
@@ -363,9 +383,38 @@ if ! has_cli_arg "--seed" "$@"; then
 fi
 ARGS+=("$@")
 
-mkdir -p "${PROJECT_DIR}/run_jobs"
+if [ "${DRY_RUN:-false}" = "true" ]; then
+  echo "Project dir: ${PROJECT_DIR}"
+  echo "Preset: ${PRESET_NAME}"
+  echo "Command: python main.py ${ARGS[*]}"
+  exit 0
+fi
+
+mkdir -p "${PROJECT_DIR}/run_jobs" "${PROJECT_DIR}/routput_jobs_atlas"
 cd "${PROJECT_DIR}"
-source "${VENV_PATH}/bin/activate"
+if [ -n "${PBS_JOBID:-}" ] && command -v tee >/dev/null 2>&1; then
+  exec > >(tee -a "${PROJECT_DIR}/routput_jobs_atlas/job_${PBS_JOBID}.log") 2>&1
+fi
+
+if [ "${LOAD_ATLAS_EBENV:-true}" = "true" ] && [ -f /app1/ebenv ]; then
+  if [ -n "${ATLAS_EBENV_MODULE:-}" ]; then
+    source /app1/ebenv "${ATLAS_EBENV_MODULE}"
+  else
+    source /app1/ebenv
+  fi
+fi
+
+if [ -d "${VENV_PATH}" ]; then
+  source "${VENV_PATH}/bin/activate"
+elif command -v conda >/dev/null 2>&1; then
+  CONDA_BASE="$(conda info --base)"
+  source "${CONDA_BASE}/etc/profile.d/conda.sh"
+  conda activate "${CONDA_ENV_NAME}"
+else
+  echo "No virtualenv found at ${VENV_PATH}, and conda is not available." >&2
+  echo "Set VENV_PATH or CONDA_ENV_NAME before submitting the job." >&2
+  exit 1
+fi
 
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
