@@ -3,12 +3,11 @@
 # Atlas uses PBS Pro/qsub rather than Slurm/sbatch.
 # If your allocation requires a project, pass it at submission time:
 #   qsub -P <your_nus_project_id> -- run_jobs/job_atlas.sh
-# If Atlas reports "Unknown queue", list current queues with `hpc q` or `qstat -Q`
-# and pass the live GPU queue at submission time with `qsub -q <queue> ...`.
+# Current Atlas queues exposed to this account are CPU queues (`parallel`, `serial`).
 ##PBS -P <your_nus_project_id>
 #PBS -N marl2grid_atlas
-##PBS -q <gpu_queue>
-#PBS -l select=1:ncpus=20:ngpus=1:mem=50gb
+#PBS -q parallel
+#PBS -l select=1:ncpus=20:mem=50gb
 #PBS -l walltime=23:10:00
 #PBS -j oe
 #PBS -V
@@ -19,8 +18,8 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'EOF'
 Usage:
   qsub -P <project_id> -- run_jobs/job_atlas.sh [preset] [main.py args...]
-  qsub -P <project_id> -q <gpu_queue> -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
   qsub -P <project_id> -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
+  qsub -P <project_id> -q parallel -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
 
 Presets: mappo14, mappo14_fast_noheuristic, qplex14, lagrmappo14
         table5_mappo14, table5_mappo14_fullobs, table5_qplex14, table5_lagrmappo14_l, table5_lagrmappo14_o
@@ -32,20 +31,20 @@ Examples:
 
   Cluster examples:
   qsub -P <project_id> -- run_jobs/job_atlas.sh
-    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg MAPPO
+    python main.py --cuda false --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg MAPPO
 
-  If your Atlas account requires an explicit queue:
-  qsub -P <project_id> -q <gpu_queue> -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
+  Explicit CPU queue:
+  qsub -P <project_id> -q parallel -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
 
   qsub -P <project_id> -- run_jobs/job_atlas.sh qplex14 --seed 2 --track true
-    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg QPLEX --seed 2 --track true
+    python main.py --cuda false --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg QPLEX --seed 2 --track true
 
   qsub -P <project_id> -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
-    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg MAPPO --seed 0
+    python main.py --cuda false --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg MAPPO --seed 0
 
   Heuristic bottleneck benchmark:
   qsub -P <project_id> -- run_jobs/job_atlas.sh mappo14_fast_noheuristic --seed 0
-    python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 5 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --use-heuristic false --seed 0
+    python main.py --cuda false --checkpoint true --n-threads 1 --n-envs 5 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --use-heuristic false --seed 0
 
   Fast Table 5-style presets use paper hyperparameters with many parallel envs.
   Run one seed-0 job:
@@ -141,7 +140,7 @@ set_fast_table5_runtime() {
   set_default ROLLOUT_BATCH "$((N_ENVS * N_STEPS))"
   set_default EVAL_FREQ "$((N_ENVS * N_STEPS * 5))"
   set_default PY_TIME_LIMIT 1380
-  set_default CUDA true
+  set_default CUDA false
   set_default CHECKPOINT true
 }
 
@@ -152,7 +151,7 @@ set_real_table5_runtime() {
   set_default ROLLOUT_BATCH 20000
   set_default EVAL_FREQ 20000
   set_default PY_TIME_LIMIT 115
-  set_default CUDA true
+  set_default CUDA false
   set_default CHECKPOINT true
 }
 
@@ -188,7 +187,7 @@ case "${PRESET_NAME}" in
     set_default ROLLOUT_BATCH 4000
     set_default EVAL_FREQ 20000
     set_default PY_TIME_LIMIT 120
-    set_default CUDA true
+    set_default CUDA false
     set_default CHECKPOINT true
     ;;
 
@@ -265,7 +264,7 @@ set_default N_STEPS 520
 set_default ROLLOUT_BATCH "$((N_ENVS * N_STEPS))"
 set_default EVAL_FREQ 20000
 set_default PY_TIME_LIMIT 1380
-set_default CUDA true
+set_default CUDA false
 set_default CHECKPOINT true
 
 has_cli_arg() {
