@@ -3,9 +3,11 @@
 # Atlas uses PBS Pro/qsub rather than Slurm/sbatch.
 # If your allocation requires a project, pass it at submission time:
 #   qsub -P <your_nus_project_id> -- run_jobs/job_atlas.sh
+# If Atlas reports "Unknown queue", list current queues with `hpc q` or `qstat -Q`
+# and pass the live GPU queue at submission time with `qsub -q <queue> ...`.
 ##PBS -P <your_nus_project_id>
 #PBS -N marl2grid_atlas
-#PBS -q volta_gpu
+##PBS -q <gpu_queue>
 #PBS -l select=1:ncpus=20:ngpus=1:mem=50gb
 #PBS -l walltime=23:10:00
 #PBS -j oe
@@ -17,6 +19,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   cat <<'EOF'
 Usage:
   qsub -P <project_id> -- run_jobs/job_atlas.sh [preset] [main.py args...]
+  qsub -P <project_id> -q <gpu_queue> -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
   qsub -P <project_id> -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
 
 Presets: mappo14, mappo14_fast_noheuristic, qplex14, lagrmappo14
@@ -30,6 +33,9 @@ Examples:
   Cluster examples:
   qsub -P <project_id> -- run_jobs/job_atlas.sh
     python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg MAPPO
+
+  If your Atlas account requires an explicit queue:
+  qsub -P <project_id> -q <gpu_queue> -v PRESET=mappo14,SEED=0 run_jobs/job_atlas.sh
 
   qsub -P <project_id> -- run_jobs/job_atlas.sh qplex14 --seed 2 --track true
     python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 20 --n-steps 520 --eval-freq 20000 --time-limit 1380 --env-id bus14 --alg QPLEX --seed 2 --track true
@@ -55,6 +61,10 @@ Examples:
     qsub -P <project_id> -- run_jobs/job_atlas.sh table5_real_qplex14 --seed 0
     qsub -P <project_id> -- run_jobs/job_atlas.sh table5_real_lagrmappo14_l --seed 0
     qsub -P <project_id> -- run_jobs/job_atlas.sh table5_real_lagrmappo14_o --seed 0
+
+Before submitting, check live queue names on Atlas with:
+  hpc q
+  qstat -Q
 
 Environment overrides: PRESET, PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, ATLAS_EBENV_MODULE, LOAD_ATLAS_EBENV, DRY_RUN, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, DECENTRALIZED, WANDB_ENTITY, WANDB_PROJECT
 EOF
