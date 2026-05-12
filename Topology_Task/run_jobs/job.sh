@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=128G
-#SBATCH --time=23:10:00
+#SBATCH --time=23:59:00
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --gres=gpu:1
@@ -124,7 +124,7 @@ set_fast_table5_runtime() {
   set_default N_STEPS "$((N_ENVS * 2))"
   set_default ROLLOUT_BATCH "$((N_ENVS * N_STEPS))"
   set_default EVAL_FREQ "$((N_ENVS * N_STEPS * 5))"
-  set_default PY_TIME_LIMIT 1380
+  set_default PY_TIME_LIMIT 1430
   set_default CUDA true
   set_default CHECKPOINT false
 }
@@ -135,7 +135,7 @@ set_real_table5_runtime() {
   set_default N_STEPS 2000
   set_default ROLLOUT_BATCH 20000
   set_default EVAL_FREQ 20000
-  set_default PY_TIME_LIMIT 1380
+  set_default PY_TIME_LIMIT 1430
   set_default CUDA true
   set_default CHECKPOINT false
 }
