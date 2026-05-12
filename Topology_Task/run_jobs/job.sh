@@ -5,8 +5,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
-#SBATCH --mem=64G
-#SBATCH --time=00:05:00
+#SBATCH --mem=128G
+#SBATCH --time=23:10:00
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --gres=gpu:1
@@ -18,7 +18,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 Usage: sbatch run_jobs/job.sh [preset] [main.py args...]
 
 Presets: mappo14, mappo14_fast_noheuristic, qplex14, lagrmappo14
-        table5_mappo14, table5_qplex14, table5_lagrmappo14_l, table5_lagrmappo14_o
+        table5_mappo14, table5_mappo14_fullobs, table5_qplex14, table5_lagrmappo14_l, table5_lagrmappo14_o
         table5_real_mappo14, table5_real_qplex14, table5_real_lagrmappo14_l, table5_real_lagrmappo14_o
 
 Examples:
@@ -42,6 +42,7 @@ Examples:
   Fast Table 5-style presets use paper hyperparameters with 40 parallel envs.
   Run one seed-0 job:
     sbatch run_jobs/job.sh table5_mappo14 --seed 0
+    sbatch run_jobs/job.sh table5_mappo14_fullobs --seed 0
     sbatch run_jobs/job.sh table5_qplex14 --seed 0
     sbatch run_jobs/job.sh table5_lagrmappo14_l --seed 0
     sbatch run_jobs/job.sh table5_lagrmappo14_o --seed 0
@@ -53,7 +54,7 @@ Examples:
     sbatch run_jobs/job.sh table5_real_lagrmappo14_l --seed 0
     sbatch run_jobs/job.sh table5_real_lagrmappo14_o --seed 0
 
-Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, WANDB_ENTITY, WANDB_PROJECT
+Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, DECENTRALIZED, WANDB_ENTITY, WANDB_PROJECT
 EOF
   exit 0
 fi
@@ -119,11 +120,11 @@ set_table5_lagrmappo() {
 
 set_fast_table5_runtime() {
   set_default N_THREADS 1
-  set_default N_ENVS 40 #40 #120
-  set_default N_STEPS 520 #520 #480
+  set_default N_ENVS 120 #40 #120
+  set_default N_STEPS "$((N_ENVS * 2))"
   set_default ROLLOUT_BATCH "$((N_ENVS * N_STEPS))"
-  set_default EVAL_FREQ "$((N_ENVS * N_STEPS))"
-  set_default PY_TIME_LIMIT 310
+  set_default EVAL_FREQ "$((N_ENVS * N_STEPS * 5))"
+  set_default PY_TIME_LIMIT 1380
   set_default CUDA true
   set_default CHECKPOINT true
 }
@@ -135,7 +136,7 @@ set_real_table5_runtime() {
   set_default ROLLOUT_BATCH 20000
   set_default EVAL_FREQ 20000
   set_default PY_TIME_LIMIT 115
-  set_default CUDA false
+  set_default CUDA true
   set_default CHECKPOINT true
 }
 
@@ -178,6 +179,14 @@ case "${1:-mappo14}" in
     set_table5_common MAPPO
     set_fast_table5_runtime
     set_table5_mappo
+    ;;
+
+  table5_mappo14_fullobs)
+    [ "$#" -gt 0 ] && shift
+    set_table5_common MAPPO
+    set_fast_table5_runtime
+    set_table5_mappo
+    set_default DECENTRALIZED false
     ;;
 
   table5_qplex14)
@@ -325,6 +334,7 @@ add_arg --env-id "${ENV_ID}"
 add_arg --alg "${ALG}"
 add_arg --constraints-type "${CONSTRAINTS_TYPE:-}"
 add_arg --use-heuristic "${USE_HEURISTIC:-}"
+add_arg --decentralized "${DECENTRALIZED:-}"
 add_arg --track "${TRACK:-}"
 add_arg --wandb-entity "${WANDB_ENTITY:-}"
 add_arg --wandb-project "${WANDB_PROJECT:-}"
