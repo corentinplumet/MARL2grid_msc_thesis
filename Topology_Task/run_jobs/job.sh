@@ -126,18 +126,18 @@ set_fast_table5_runtime() {
   set_default EVAL_FREQ "$((N_ENVS * N_STEPS * 5))"
   set_default PY_TIME_LIMIT 1380
   set_default CUDA true
-  set_default CHECKPOINT true
+  set_default CHECKPOINT false
 }
 
 set_real_table5_runtime() {
-  set_default N_THREADS 1
+  set_default N_THREADS 4
   set_default N_ENVS 10
   set_default N_STEPS 2000
   set_default ROLLOUT_BATCH 20000
   set_default EVAL_FREQ 20000
-  set_default PY_TIME_LIMIT 115
+  set_default PY_TIME_LIMIT 1380
   set_default CUDA true
-  set_default CHECKPOINT true
+  set_default CHECKPOINT false
 }
 
 case "${1:-mappo14}" in
