@@ -276,6 +276,7 @@ class MAEnvWrapper(MAEnv):
                 self.g2op_env,
                 self.observation_domains,
                 include_neighbors=getattr(args, "gnn_include_neighbors", True),
+                include_maintenance=env_config[env_id]['maintenance'],
             )
             self.graph_specs = self.graph_builder.specs
     

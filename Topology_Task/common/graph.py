@@ -8,24 +8,23 @@ class GridGraphBuilder:
     masks activating only the current bus-to-bus connections from topo_vect.
     """
 
-    NODE_FEATURES = [
+    BASE_NODE_FEATURES = [
         "gen_p",
         "gen_theta",
         "load_p",
         "load_theta",
-        "topo_mean",
-        "topo_bus1_frac",
-        "topo_bus2_frac",
-        "topo_disconnected_frac",
         "time_before_cooldown_sub",
         "domain_mask",
     ]
 
-    EDGE_FEATURES = [
+    BASE_EDGE_FEATURES = [
         "line_status",
         "rho",
         "timestep_overflow",
         "time_before_cooldown_line",
+    ]
+
+    MAINTENANCE_EDGE_FEATURES = [
         "time_next_maintenance",
         "duration_next_maintenance",
     ]
@@ -35,6 +34,7 @@ class GridGraphBuilder:
         g2op_env,
         observation_domains: Dict[str, List[int]],
         include_neighbors: bool = True,
+        include_maintenance: bool = False,
     ) -> None:
         self.g2op_env = g2op_env
         self.observation_domains = {
@@ -42,6 +42,10 @@ class GridGraphBuilder:
             for agent, nodes in observation_domains.items()
         }
         self.include_neighbors = include_neighbors
+        self.node_features = list(self.BASE_NODE_FEATURES)
+        self.edge_features = list(self.BASE_EDGE_FEATURES)
+        if include_maintenance:
+            self.edge_features += self.MAINTENANCE_EDGE_FEATURES
 
         self.n_sub = int(g2op_env.n_sub)
         self.n_line = int(g2op_env.n_line)
@@ -56,12 +60,6 @@ class GridGraphBuilder:
         self.gen_pos = self._topo_pos_array("gen_pos_topo_vect", getattr(g2op_env, "n_gen", 0))
         self.load_pos = self._topo_pos_array("load_pos_topo_vect", getattr(g2op_env, "n_load", 0))
 
-        sub_info = getattr(g2op_env, "sub_info", None)
-        self.sub_info = np.asarray(sub_info, dtype=np.int64) if sub_info is not None else None
-        self.topo_offsets = None
-        if self.sub_info is not None:
-            self.topo_offsets = np.concatenate([[0], np.cumsum(self.sub_info)])
-
         self.specs = {"state": self._make_spec(np.arange(self.n_sub), np.arange(self.n_line))}
         for agent, domain_nodes in self.observation_domains.items():
             sub_ids, line_ids = self._local_ids(domain_nodes)
@@ -69,11 +67,11 @@ class GridGraphBuilder:
 
     @property
     def node_dim(self) -> int:
-        return len(self.NODE_FEATURES)
+        return len(self.node_features)
 
     @property
     def edge_dim(self) -> int:
-        return len(self.EDGE_FEATURES)
+        return len(self.edge_features)
 
     def build(self, obs) -> Dict[str, Dict[str, np.ndarray]]:
         state_graph = self.build_for_spec(obs, self.specs["state"])
@@ -158,7 +156,7 @@ class GridGraphBuilder:
 
     def _bus_node_features(self, obs, controlled_nodes):
         features = np.zeros((self.n_bus_nodes, self.node_dim), dtype=np.float32)
-        col = {name: idx for idx, name in enumerate(self.NODE_FEATURES)}
+        col = {name: idx for idx, name in enumerate(self.node_features)}
 
         self._put_bus_asset_feature(features, col["gen_p"], obs, self.gen_to_sub, self.gen_pos, self._obs_array(obs, "gen_p"), mode="sum")
         self._put_bus_asset_feature(features, col["gen_theta"], obs, self.gen_to_sub, self.gen_pos, self._obs_array(obs, "gen_theta"), mode="mean")
@@ -170,8 +168,6 @@ class GridGraphBuilder:
         if sub_cooldown is not None:
             for sub_id in range(self.n_sub):
                 features[self._bus_node_ids([sub_id]), col["time_before_cooldown_sub"]] = sub_cooldown[sub_id]
-
-        self._put_bus_topology_features(features, obs, col)
 
         controlled_mask = np.isin(np.arange(self.n_sub), controlled_nodes).astype(np.float32)
         for sub_id, is_controlled in enumerate(controlled_mask):
@@ -203,7 +199,7 @@ class GridGraphBuilder:
 
     def _line_feature_matrix(self, obs):
         features = np.zeros((self.n_line, self.edge_dim), dtype=np.float32)
-        for idx, name in enumerate(self.EDGE_FEATURES):
+        for idx, name in enumerate(self.edge_features):
             values = self._obs_array(obs, name, expected=self.n_line)
             if values is not None:
                 features[:, idx] = values
@@ -226,26 +222,6 @@ class GridGraphBuilder:
             np.add.at(counts, node_ids[valid], 1.0)
             sums = np.divide(sums, np.maximum(counts, 1.0))
         features[:, col] = sums
-
-    def _put_bus_topology_features(self, features, obs, col):
-        topo_vect = self._obs_array(obs, "topo_vect")
-        for sub_id in range(self.n_sub):
-            disconnected_frac = 0.0
-            bus_fracs = np.zeros(self.n_busbar, dtype=np.float32)
-            if topo_vect is not None and self.topo_offsets is not None and len(topo_vect) >= self.topo_offsets[-1]:
-                start, end = self.topo_offsets[sub_id], self.topo_offsets[sub_id + 1]
-                topo = topo_vect[start:end]
-                if len(topo) > 0:
-                    disconnected_frac = float(np.mean(topo <= 0))
-                    for bus in range(self.n_busbar):
-                        bus_fracs[bus] = float(np.mean(topo == bus + 1))
-
-            for bus in range(self.n_busbar):
-                node_id = self._bus_node_id(sub_id, bus)
-                features[node_id, col["topo_mean"]] = bus_fracs[bus]
-                features[node_id, col["topo_bus1_frac"]] = 1.0 if bus == 0 else 0.0
-                features[node_id, col["topo_bus2_frac"]] = 1.0 if bus == 1 else 0.0
-                features[node_id, col["topo_disconnected_frac"]] = disconnected_frac
 
     def _obs_array(self, obs, name, expected=None):
         if not hasattr(obs, name):
