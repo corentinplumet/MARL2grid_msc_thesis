@@ -5,8 +5,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=40
-#SBATCH --mem=128G
-#SBATCH --time=23:59:00
+#SBATCH --mem=32G
+#SBATCH --time=00:30:00
 #SBATCH --partition=gpu
 #SBATCH --qos=normal
 #SBATCH --gres=gpu:1
@@ -18,7 +18,8 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 Usage: sbatch run_jobs/job.sh [preset] [main.py args...]
 
 Presets: mappo14, mappo14_fast_noheuristic, qplex14, lagrmappo14
-        table5_mappo14, table5_mappo14_fullobs, table5_qplex14, table5_lagrmappo14_l, table5_lagrmappo14_o
+        table5_mappo14, table5_mappo14_fullobs, table5_mappo14_gnn_actor, table5_mappo14_gnn_critic, table5_mappo14_gnn, table5_mappo14_gnn_bus
+        table5_qplex14, table5_lagrmappo14_l, table5_lagrmappo14_o
         table5_real_mappo14, table5_real_qplex14, table5_real_lagrmappo14_l, table5_real_lagrmappo14_o
 
 Examples:
@@ -39,13 +40,21 @@ Examples:
   sbatch run_jobs/job.sh mappo14_fast_noheuristic --seed 0
     python main.py --cuda true --checkpoint true --n-threads 1 --n-envs 40 --n-steps 120 --eval-freq 20000 --time-limit 120 --env-id bus14 --alg MAPPO --track false --use-heuristic false --seed 0
 
-  Fast Table 5-style presets use paper hyperparameters with 40 parallel envs.
+  Fast Table 5-style presets use paper hyperparameters with 120 parallel envs.
   Run one seed-0 job:
     sbatch run_jobs/job.sh table5_mappo14 --seed 0
     sbatch run_jobs/job.sh table5_mappo14_fullobs --seed 0
+    sbatch run_jobs/job.sh table5_mappo14_gnn --seed 0
+    sbatch run_jobs/job.sh table5_mappo14_gnn_bus --seed 0
     sbatch run_jobs/job.sh table5_qplex14 --seed 0
     sbatch run_jobs/job.sh table5_lagrmappo14_l --seed 0
     sbatch run_jobs/job.sh table5_lagrmappo14_o --seed 0
+
+  GNN MAPPO presets follow GNN_EXPERIMENTS.md:
+    table5_mappo14_gnn_actor   -> --actor-encoder gnn --critic-encoder mlp
+    table5_mappo14_gnn_critic  -> --actor-encoder mlp --critic-encoder gnn
+    table5_mappo14_gnn         -> --actor-encoder gnn --critic-encoder gnn
+    table5_mappo14_gnn_bus     -> actor+critic GNN with --gnn-graph-type bus
 
   Real Table 5 presets use paper hyperparameters with 10 parallel envs and 2000 rollout steps.
   Run one seed-0 job:
@@ -54,7 +63,7 @@ Examples:
     sbatch run_jobs/job.sh table5_real_lagrmappo14_l --seed 0
     sbatch run_jobs/job.sh table5_real_lagrmappo14_o --seed 0
 
-Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, DECENTRALIZED, WANDB_ENTITY, WANDB_PROJECT
+Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, DECENTRALIZED, WANDB_ENTITY, WANDB_PROJECT, ACTOR_ENCODER, CRITIC_ENCODER, COST_CRITIC_ENCODER, Q_ENCODER, MIXER_ENCODER, GNN_TYPE, GNN_HIDDEN_DIM, GNN_OUT_DIM, GNN_LAYERS, GNN_HEADS, GNN_AGGR, GNN_LAYER_NORM, GNN_CONCAT_FLAT, GNN_GRAPH_TYPE, GNN_INCLUDE_NEIGHBORS
 EOF
   exit 0
 fi
@@ -116,6 +125,25 @@ set_table5_lagrmappo() {
   set_default COST_THRESHOLD "$2"
   set_default LAG_MUL 0.0
   set_default LAG_LR 0.05
+}
+
+set_gnn_defaults() {
+  set_default GNN_TYPE gat
+  set_default GNN_HIDDEN_DIM 128
+  set_default GNN_OUT_DIM 128
+  set_default GNN_LAYERS 2
+  set_default GNN_HEADS 1
+  set_default GNN_AGGR mean
+  set_default GNN_LAYER_NORM true
+  set_default GNN_CONCAT_FLAT false
+  set_default GNN_GRAPH_TYPE bus
+  set_default GNN_INCLUDE_NEIGHBORS true
+}
+
+set_mappo_gnn_encoders() {
+  set_default ACTOR_ENCODER "$1"
+  set_default CRITIC_ENCODER "$2"
+  set_gnn_defaults
 }
 
 set_fast_table5_runtime() {
@@ -187,6 +215,39 @@ case "${1:-mappo14}" in
     set_fast_table5_runtime
     set_table5_mappo
     set_default DECENTRALIZED false
+    ;;
+
+  table5_mappo14_gnn_actor)
+    [ "$#" -gt 0 ] && shift
+    set_table5_common MAPPO
+    set_fast_table5_runtime
+    set_table5_mappo
+    set_mappo_gnn_encoders gnn mlp
+    ;;
+
+  table5_mappo14_gnn_critic)
+    [ "$#" -gt 0 ] && shift
+    set_table5_common MAPPO
+    set_fast_table5_runtime
+    set_table5_mappo
+    set_mappo_gnn_encoders mlp gnn
+    ;;
+
+  table5_mappo14_gnn)
+    [ "$#" -gt 0 ] && shift
+    set_table5_common MAPPO
+    set_fast_table5_runtime
+    set_table5_mappo
+    set_mappo_gnn_encoders gnn gnn
+    ;;
+
+  table5_mappo14_gnn_bus)
+    [ "$#" -gt 0 ] && shift
+    set_table5_common MAPPO
+    set_fast_table5_runtime
+    set_table5_mappo
+    set_mappo_gnn_encoders gnn gnn
+    set_default GNN_GRAPH_TYPE bus
     ;;
 
   table5_qplex14)
@@ -338,6 +399,21 @@ add_arg --decentralized "${DECENTRALIZED:-}"
 add_arg --track "${TRACK:-}"
 add_arg --wandb-entity "${WANDB_ENTITY:-}"
 add_arg --wandb-project "${WANDB_PROJECT:-}"
+add_arg --actor-encoder "${ACTOR_ENCODER:-}"
+add_arg --critic-encoder "${CRITIC_ENCODER:-}"
+add_arg --cost-critic-encoder "${COST_CRITIC_ENCODER:-}"
+add_arg --q-encoder "${Q_ENCODER:-}"
+add_arg --mixer-encoder "${MIXER_ENCODER:-}"
+add_arg --gnn-type "${GNN_TYPE:-}"
+add_arg --gnn-hidden-dim "${GNN_HIDDEN_DIM:-}"
+add_arg --gnn-out-dim "${GNN_OUT_DIM:-}"
+add_arg --gnn-layers "${GNN_LAYERS:-}"
+add_arg --gnn-heads "${GNN_HEADS:-}"
+add_arg --gnn-aggr "${GNN_AGGR:-}"
+add_arg --gnn-layer-norm "${GNN_LAYER_NORM:-}"
+add_arg --gnn-concat-flat "${GNN_CONCAT_FLAT:-}"
+add_arg --gnn-graph-type "${GNN_GRAPH_TYPE:-}"
+add_arg --gnn-include-neighbors "${GNN_INCLUDE_NEIGHBORS:-}"
 add_arg --total-timesteps "${TOTAL_TIMESTEPS:-}"
 add_arg --gamma "${GAMMA:-}"
 add_arg --max-grad-norm "${MAX_GRAD_NORM:-}"
