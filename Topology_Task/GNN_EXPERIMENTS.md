@@ -34,7 +34,7 @@ Actor and critic:
 python main.py --alg MAPPO --env-id bus14 --actor-encoder gnn --critic-encoder gnn --seed 0
 ```
 
-Busbar-node graph:
+The GNN graph is busbar-only. Passing `--gnn-graph-type bus` is optional because it is the default:
 
 ```bash
 python main.py --alg MAPPO --env-id bus14 --actor-encoder gnn --critic-encoder gnn --gnn-graph-type bus --seed 0
@@ -100,17 +100,22 @@ python main.py --alg QPLEX --env-id bus14 --q-encoder gnn --mixer-encoder gnn --
 --gnn-layers 2
 --gnn-type gat
 --gnn-heads 1
---gnn-aggr mean
+--gnn-readout-aggr mean
+--graphsage-aggr mean
 --gnn-layer-norm true
 --gnn-concat-flat false
---gnn-graph-type substation
+--gnn-graph-type bus
 --gnn-include-neighbors true
 ```
 
 `--gnn-type` selects the PyTorch Geometric layer: `gcn`, `gat`, `gine`, or `graphsage`.
 
-`--gnn-graph-type` selects the graph construction: `substation` uses one node per substation; `bus` uses one node per busbar and activates the current bus-to-bus line connections from `topo_vect`.
+`--gnn-readout-aggr` selects how node embeddings are pooled into one graph embedding: `mean`, `sum`, or `max`.
+
+`--graphsage-aggr` only applies when `--gnn-type graphsage`; it selects GraphSAGE neighborhood aggregation: `mean` or `sum`.
+
+`--gnn-graph-type` is kept as a compatibility flag, but only `bus` is supported. The graph uses one node per busbar and activates the current bus-to-bus line connections from `topo_vect`.
 
 `--gnn-concat-flat true` feeds the original flat observation alongside the graph embedding. This is useful for checking whether the GNN helps by itself or mainly as an auxiliary encoder.
 
-`--gnn-include-neighbors true` expands each local agent graph with one-hop neighboring substations. Set it to `false` for stricter local-only graphs.
+`--gnn-include-neighbors true` expands each local agent busbar graph with one-hop neighboring substations. Set it to `false` for stricter local-only graphs.

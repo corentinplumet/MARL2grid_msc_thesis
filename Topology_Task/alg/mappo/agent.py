@@ -83,6 +83,17 @@ class Actor(nn.Module):
 
         return action, probs.log_prob(action), probs.entropy()
     
+    # def get_eval_discrete_action(self, x: th.Tensor) -> th.Tensor:
+    #     """Evaluate discrete actions without exploration.
+
+    #     Args:
+    #         x: Input observations.
+
+    #     Returns:
+    #         A tensor with deterministic discrete actions for evaluation.
+    #     """
+    #     return self.get_discrete_action(x)[0]
+    
     def get_eval_discrete_action(self, x: th.Tensor) -> th.Tensor:
         """Evaluate discrete actions without exploration.
 
@@ -92,8 +103,9 @@ class Actor(nn.Module):
         Returns:
             A tensor with deterministic discrete actions for evaluation.
         """
-        return self.get_discrete_action(x)[0]
-
+        logits = self.actor(self._encode(x))
+        return th.argmax(logits, dim=-1)
+    
     def get_continuous_action(self, x: th.Tensor, action: th.Tensor = None) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         raise("Redispatching actions are not yet implemented")
        

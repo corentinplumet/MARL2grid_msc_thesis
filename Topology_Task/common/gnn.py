@@ -2,9 +2,9 @@ from common.imports import *
 from common.utils import get_flat_obs
 
 try:
-    from torch_geometric.nn import GATConv, GCNConv, GINEConv, SAGEConv, global_add_pool
+    from torch_geometric.nn import GATConv, GCNConv, GINEConv, SAGEConv, global_add_pool, global_max_pool
 except ModuleNotFoundError:
-    GATConv = GCNConv = GINEConv = SAGEConv = global_add_pool = None
+    GATConv = GCNConv = GINEConv = SAGEConv = global_add_pool = global_max_pool = None
 
 
 class GraphEncoder(nn.Module):
@@ -17,7 +17,8 @@ class GraphEncoder(nn.Module):
         out_dim: int,
         n_layers: int = 2,
         conv_type: str = "gat",
-        aggr: str = "mean",
+        graphsage_aggr: str = "mean",
+        readout_aggr: str = "mean",
         layer_norm: bool = True,
         heads: int = 1,
     ) -> None:
@@ -31,6 +32,9 @@ class GraphEncoder(nn.Module):
             raise ValueError("A GNN encoder needs at least one layer.")
 
         self.conv_type = conv_type.lower()
+        self.readout_aggr = readout_aggr.lower()
+        if self.readout_aggr not in {"mean", "sum", "max"}:
+            raise ValueError(f"Unsupported GNN readout aggregation: {readout_aggr}")
         self.edge_dim = int(graph_spec["edge_dim"])
         self.register_buffer("edge_index", th.tensor(graph_spec["edge_index"], dtype=th.long))
 
@@ -43,7 +47,7 @@ class GraphEncoder(nn.Module):
                     hidden_dim=hidden_dim,
                     edge_dim=self.edge_dim,
                     conv_type=self.conv_type,
-                    aggr=aggr,
+                    graphsage_aggr=graphsage_aggr,
                     heads=heads,
                 )
                 for idx in range(n_layers)
@@ -68,18 +72,37 @@ class GraphEncoder(nn.Module):
                 x = conv(x, edge_index)
             x = norm(F.relu(x))
 
-        if node_mask is not None:
-            x = x * node_mask.unsqueeze(-1)
-            pooled = global_add_pool(x, batch)
-            denom = global_add_pool(node_mask.unsqueeze(-1), batch).clamp_min(1.0)
-            pooled = pooled / denom
-        else:
-            pooled = global_add_pool(x, batch)
-            denom = th.bincount(batch, minlength=int(batch.max().item()) + 1).to(x).unsqueeze(-1).clamp_min(1.0)
-            pooled = pooled / denom
-
+        pooled = self._pool_nodes(x, batch, node_mask)
         embedding = self.readout(pooled)
         return embedding.squeeze(0) if unbatched else embedding
+
+    def _pool_nodes(
+        self,
+        x: th.Tensor,
+        batch: th.Tensor,
+        node_mask: Optional[th.Tensor],
+    ) -> th.Tensor:
+        if node_mask is not None:
+            if self.readout_aggr == "max":
+                masked_x = x.masked_fill(node_mask.unsqueeze(-1) <= 0, -th.inf)
+                pooled = global_max_pool(masked_x, batch)
+                return th.nan_to_num(pooled, nan=0.0, neginf=0.0, posinf=0.0)
+
+            x = x * node_mask.unsqueeze(-1)
+            pooled = global_add_pool(x, batch)
+            if self.readout_aggr == "mean":
+                denom = global_add_pool(node_mask.unsqueeze(-1), batch).clamp_min(1.0)
+                pooled = pooled / denom
+            return pooled
+
+        if self.readout_aggr == "max":
+            return global_max_pool(x, batch)
+
+        pooled = global_add_pool(x, batch)
+        if self.readout_aggr == "mean":
+            denom = th.bincount(batch, minlength=int(batch.max().item()) + 1).to(x).unsqueeze(-1).clamp_min(1.0)
+            pooled = pooled / denom
+        return pooled
 
     def _to_pyg_batch(self, graph_obs: Dict[str, th.Tensor]):
         nodes = graph_obs["node_features"]
@@ -119,7 +142,7 @@ class GraphEncoder(nn.Module):
         hidden_dim: int,
         edge_dim: int,
         conv_type: str,
-        aggr: str,
+        graphsage_aggr: str,
         heads: int,
     ) -> nn.Module:
         if conv_type == "gcn":
@@ -140,7 +163,7 @@ class GraphEncoder(nn.Module):
             )
             return GINEConv(mlp, edge_dim=edge_dim)
         if conv_type == "graphsage":
-            sage_aggr = "add" if aggr == "sum" else aggr
+            sage_aggr = "add" if graphsage_aggr == "sum" else graphsage_aggr
             return SAGEConv(in_dim, hidden_dim, aggr=sage_aggr)
         raise ValueError(f"Unsupported GNN type: {conv_type}")
 
@@ -161,7 +184,8 @@ class GraphAndFlatEncoder(nn.Module):
             out_dim=args.gnn_out_dim,
             n_layers=args.gnn_layers,
             conv_type=args.gnn_type,
-            aggr=args.gnn_aggr,
+            graphsage_aggr=getattr(args, "graphsage_aggr", getattr(args, "gnn_aggr", "mean")),
+            readout_aggr=getattr(args, "gnn_readout_aggr", "mean"),
             layer_norm=args.gnn_layer_norm,
             heads=args.gnn_heads,
         )

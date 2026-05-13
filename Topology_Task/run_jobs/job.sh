@@ -53,8 +53,8 @@ Examples:
   GNN MAPPO presets follow GNN_EXPERIMENTS.md:
     table5_mappo14_gnn_actor   -> --actor-encoder gnn --critic-encoder mlp
     table5_mappo14_gnn_critic  -> --actor-encoder mlp --critic-encoder gnn
-    table5_mappo14_gnn         -> --actor-encoder gnn --critic-encoder gnn
-    table5_mappo14_gnn_bus     -> actor+critic GNN with --gnn-graph-type bus
+    table5_mappo14_gnn         -> --actor-encoder gnn --critic-encoder gnn with busbar graph
+    table5_mappo14_gnn_bus     -> alias of table5_mappo14_gnn with explicit --gnn-graph-type bus
 
   Real Table 5 presets use paper hyperparameters with 10 parallel envs and 2000 rollout steps.
   Run one seed-0 job:
@@ -63,7 +63,7 @@ Examples:
     sbatch run_jobs/job.sh table5_real_lagrmappo14_l --seed 0
     sbatch run_jobs/job.sh table5_real_lagrmappo14_o --seed 0
 
-Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, DECENTRALIZED, WANDB_ENTITY, WANDB_PROJECT, ACTOR_ENCODER, CRITIC_ENCODER, COST_CRITIC_ENCODER, Q_ENCODER, MIXER_ENCODER, GNN_TYPE, GNN_HIDDEN_DIM, GNN_OUT_DIM, GNN_LAYERS, GNN_HEADS, GNN_AGGR, GNN_LAYER_NORM, GNN_CONCAT_FLAT, GNN_GRAPH_TYPE, GNN_INCLUDE_NEIGHBORS
+Environment overrides: PROJECT_DIR, VENV_PATH, CONDA_ENV_NAME, N_ENVS, ROLLOUT_BATCH, N_STEPS, EVAL_FREQ, PY_TIME_LIMIT, CUDA, CHECKPOINT, TOTAL_TIMESTEPS, SEED, TRACK, DECENTRALIZED, WANDB_ENTITY, WANDB_PROJECT, ACTOR_ENCODER, CRITIC_ENCODER, COST_CRITIC_ENCODER, Q_ENCODER, MIXER_ENCODER, GNN_TYPE, GNN_HIDDEN_DIM, GNN_OUT_DIM, GNN_LAYERS, GNN_HEADS, GNN_READOUT_AGGR, GRAPHSAGE_AGGR, GNN_LAYER_NORM, GNN_CONCAT_FLAT, GNN_GRAPH_TYPE, GNN_INCLUDE_NEIGHBORS
 EOF
   exit 0
 fi
@@ -133,7 +133,8 @@ set_gnn_defaults() {
   set_default GNN_OUT_DIM 128
   set_default GNN_LAYERS 2
   set_default GNN_HEADS 1
-  set_default GNN_AGGR mean
+  set_default GNN_READOUT_AGGR mean
+  set_default GRAPHSAGE_AGGR mean
   set_default GNN_LAYER_NORM true
   set_default GNN_CONCAT_FLAT false
   set_default GNN_GRAPH_TYPE bus
@@ -409,7 +410,8 @@ add_arg --gnn-hidden-dim "${GNN_HIDDEN_DIM:-}"
 add_arg --gnn-out-dim "${GNN_OUT_DIM:-}"
 add_arg --gnn-layers "${GNN_LAYERS:-}"
 add_arg --gnn-heads "${GNN_HEADS:-}"
-add_arg --gnn-aggr "${GNN_AGGR:-}"
+add_arg --gnn-readout-aggr "${GNN_READOUT_AGGR:-}"
+add_arg --graphsage-aggr "${GRAPHSAGE_AGGR:-}"
 add_arg --gnn-layer-norm "${GNN_LAYER_NORM:-}"
 add_arg --gnn-concat-flat "${GNN_CONCAT_FLAT:-}"
 add_arg --gnn-graph-type "${GNN_GRAPH_TYPE:-}"
