@@ -7,18 +7,7 @@ from .config import get_alg_args
 from common.checkpoint import CheckpointSaver
 from common.imports import *
 from common.logger import ConstrainedLogger
-from common.utils import (
-    cast_np_to_tensors,
-    clone_nested,
-    flatten_rollout_obs,
-    get_joint_obs,
-    index_nested,
-    merge_namespaces,
-    set_nested_at_step,
-    set_nested_env_index,
-    strip_state_graph,
-    zeros_like_with_leading,
-)
+from common.utils import cast_np_to_tensors, stack_agent_obs_by_env
 from env.eval import CMDPEvaluator
 
 class LagrMAPPO:
@@ -36,7 +25,7 @@ class LagrMAPPO:
             ckpt (CheckpointSaver): The checkpoint handler for saving and loading training state.
         """
         # Load algorithm-specific arguments if not resuming from a checkpoint
-        if not ckpt.resumed: args = merge_namespaces(get_alg_args(), args)
+        if not ckpt.resumed: args = ap.Namespace(**vars(args), **vars(get_alg_args()))
 
         assert args.n_steps % args.n_envs == 0, \
             f"Invalid train frequency (n_steps): {args.n_steps}. Must be multiple of n_envs {args.n_envs}"
@@ -57,9 +46,8 @@ class LagrMAPPO:
         actors = {f"agent_{idx}": Actor(idx, envs, args, continuous_actions).to(device) 
                   for idx in range(len(agent_ids))}
     
-        critic = Critic(envs, args).to(device)
-        cost_critic_args = ap.Namespace(**{**vars(args), "critic_encoder": args.cost_critic_encoder})
-        cost_critic = Critic(envs, cost_critic_args).to(device)
+        critic = Critic(envs, args)
+        cost_critic = Critic(envs, args)
 
         if ckpt.resumed:
             for agent in actors.keys():
@@ -86,11 +74,9 @@ class LagrMAPPO:
             lag_optim.load_state_dict(ckpt.loaded_run['lag_optim'])
             cost_threshold = ckpt.loaded_run['cost_threshold']
 
-        next_obs, _ = envs.reset()
-        next_obs = cast_np_to_tensors(next_obs, device)
-        critic_encoder = "gnn" if (args.critic_encoder == "gnn" or args.cost_critic_encoder == "gnn") else "mlp"
-        joint_obs_template = get_joint_obs(next_obs, critic_encoder, args.decentralized)
-        joint_observations = zeros_like_with_leading(joint_obs_template, (args.n_steps,), device=device)
+        joint_obs_size = sum(space.shape[0] for space in envs.observation_space.values()) if args.decentralized else envs.observation_space['agent_0'].shape[-1]
+        joint_observations = th.zeros((args.n_steps, args.n_envs) + 
+                                      (joint_obs_size,)).to(device)
         values = th.zeros((args.n_steps, args.n_envs)).to(device)
         costs = th.zeros((args.n_steps, args.n_envs)).to(device)
         cost_values = th.zeros((args.n_steps, args.n_envs)).to(device)
@@ -98,7 +84,7 @@ class LagrMAPPO:
         terminations = th.zeros((args.n_steps, args.n_envs), dtype=th.int32).to(device)
         observations, actions, logprobs, rewards = [{} for _ in range(4)]
         for id in agent_ids:
-            observations[id] = zeros_like_with_leading(strip_state_graph(next_obs[id]), (args.n_steps,), device=device)
+            observations[id] = th.zeros((args.n_steps, args.n_envs) + envs.observation_space[id].shape).to(device)
             actions[id] = th.zeros((args.n_steps, args.n_envs)).to(device)   # Assuming discrete actions
             logprobs[id] = th.zeros((args.n_steps, args.n_envs)).to(device)
             rewards[id] = th.zeros((args.n_steps, args.n_envs)).to(device)
@@ -110,6 +96,9 @@ class LagrMAPPO:
 
         global_step = 0 if not ckpt.resumed else ckpt.loaded_run['global_step']
         start_time = start_time
+        next_obs, _ = envs.reset()
+        next_obs = cast_np_to_tensors(next_obs, device)     
+
         try:
             for iteration in range(init_rollout, n_rollouts + 1):
                 # Annealing the rate if instructed to do so
@@ -123,7 +112,7 @@ class LagrMAPPO:
 
                     action, logprob = {}, {}
                     for agent in agent_ids:
-                        set_nested_at_step(observations[agent], step, strip_state_graph(next_obs[agent]))
+                        observations[agent][step] = next_obs[agent]
                     
                         with th.no_grad():
                             action[agent], logprob[agent], _ = actors[agent].get_action(next_obs[agent])
@@ -133,12 +122,10 @@ class LagrMAPPO:
 
                     # get joint obs for this
                     with th.no_grad():   
-                        joint_obs = get_joint_obs(next_obs, critic_encoder, args.decentralized)
+                        joint_obs = stack_agent_obs_by_env(next_obs) if args.decentralized else next_obs['agent_0']
                         value = critic.get_value(joint_obs)
-                        cost_value = cost_critic.get_value(joint_obs)
-                        set_nested_at_step(joint_observations, step, joint_obs)
+                        joint_observations[step] = joint_obs
                         values[step] = value.flatten()
-                        cost_values[step] = cost_value.flatten()
                         
                     next_obs, reward, next_terminations, next_truncations, infos = envs.step(action)
                 
@@ -152,14 +139,13 @@ class LagrMAPPO:
                     terminations[step] = th.tensor(next_terminations[agent_ids[0]]).to(device)
 
 
-                    next_obs = cast_np_to_tensors(next_obs, device)
-                    real_next_obs = clone_nested(next_obs)
+                    next_obs = cast_np_to_tensors(next_obs, device)      
+                    real_next_obs = next_obs.copy()    
                     cost = np.zeros(args.n_envs)    
                     for idx, done in enumerate(dones[step]):
                         if done: 
-                            final_obs = cast_np_to_tensors(infos[idx]["final_observation"], device)
                             for agent in agent_ids:
-                                set_nested_env_index(real_next_obs[agent], idx, final_obs[agent])
+                                real_next_obs[agent][idx] = th.tensor(infos[idx]["final_observation"][agent]).to(device)
                             cost[idx] = infos[idx]["final_info"]['cost']   # When done, 'cost' is also in 'final_info'
                         else:
                             cost[idx] = infos[idx]['cost']
@@ -183,7 +169,7 @@ class LagrMAPPO:
                     advantages, returns = {}, {}
                     cost_advantages, cost_returns = {}, {}
 
-                    joint_real_next_obs = get_joint_obs(real_next_obs, critic_encoder, args.decentralized)
+                    joint_real_next_obs = stack_agent_obs_by_env(real_next_obs) if args.decentralized else real_next_obs['agent_0']
                     for agent in agent_ids:
                         advantages[agent] = th.zeros_like(rewards[agent]).to(device)
                         cost_advantages[agent] = th.zeros_like(costs).to(device)
@@ -206,10 +192,10 @@ class LagrMAPPO:
 
                 b_values = values.reshape(-1)
                 b_cost_values = cost_values.reshape(-1)
-                b_joint_obs = flatten_rollout_obs(joint_observations)
+                b_joint_obs = joint_observations.reshape((-1,) + (joint_obs_size,))
                 for agent in agent_ids:
                     # Flatten the batch
-                    b_obs = flatten_rollout_obs(observations[agent])
+                    b_obs = observations[agent].reshape((-1,) + envs.observation_space[agent].shape)
                     b_logprobs = logprobs[agent].reshape(-1)
                     b_actions = actions[agent].reshape(-1,)
                     b_advantages = advantages[agent].reshape(-1)
@@ -225,7 +211,7 @@ class LagrMAPPO:
                         for start in range(0, batch_size, minibatch_size):
                             end = start + minibatch_size
                             mb_inds = b_inds[start:end]
-                            action, newlogprob, entropy = actors[agent].get_action(index_nested(b_obs, mb_inds), b_actions.long()[mb_inds])
+                            action, newlogprob, entropy = actors[agent].get_action(b_obs[mb_inds], b_actions.long()[mb_inds])
                             logratio = newlogprob - b_logprobs[mb_inds]
                             ratio = logratio.exp()
 
@@ -261,9 +247,8 @@ class LagrMAPPO:
                             actor_optim.step()
 
                             # Value loss
-                            mb_joint_obs = index_nested(b_joint_obs, mb_inds)
-                            newvalue = critic.get_value(mb_joint_obs).view(-1)
-                            newcostvalue = cost_critic.get_value(mb_joint_obs).view(-1)
+                            newvalue = critic.get_value(b_joint_obs[mb_inds]).view(-1)
+                            newcostvalue = cost_critic.get_value(b_joint_obs[mb_inds]).view(-1)
                             if args.clip_vfloss:
                                 v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
                                 v_clipped = b_values[mb_inds] + th.clamp(

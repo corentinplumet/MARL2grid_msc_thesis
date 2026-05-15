@@ -4,11 +4,8 @@ from copy import deepcopy
 from functools import partial
 
 from common.imports import *
-from common.utils import add_trailing_dim, nested_to_numpy, recursive_index_numpy
 
 def to_torch(object: object, device: th.device):
-    if isinstance(object, dict):
-        return {key: to_torch(value, device=device) for key, value in object.items()}
     return th.from_numpy(object).to(device)
     
 class Buffer:
@@ -26,34 +23,16 @@ class Buffer:
 
         self.capacity //= self.n_envs    # Fix capacity based on n° of envs
 
-        self.base_shape = (self.capacity, self.n_envs,)
-        self.obs = None
-        self.action = None
-        self.reward = None
-        self.next_obs = None
-        self.done = None
-        self.state = None
-        self.next_state = None
+        base_shape = (self.capacity, self.n_envs,)
+        self.obs = np.zeros(base_shape + (self.obs_space.shape[-1],), dtype=self.obs_space.dtype)
+        self.action = np.zeros((base_shape), dtype=self.act_space.dtype)
+        self.reward = np.zeros((base_shape), dtype=np.float32)
+        self.next_obs = deepcopy(self.obs)
+        self.done = np.zeros((base_shape), dtype=np.int8)
+        self.state = np.zeros(base_shape + (state_dim,), dtype=self.obs_space.dtype)    # TODO do a separate state buffer to avoid duplicating info when time allows
+        self.next_state = np.zeros(base_shape + (state_dim,), dtype=self.obs_space.dtype)    # TODO do a separate state buffer to avoid duplicating info when time allows
 
         self.attributes = ['obs', 'action', 'reward', 'next_obs', 'done', 'state', 'next_state']
-
-    def _allocate_like(self, value):
-        if isinstance(value, dict):
-            return {key: self._allocate_like(val) for key, val in value.items()}
-        return np.zeros(self.base_shape + tuple(value.shape[1:]), dtype=value.dtype)
-
-    def _assign_at_idx(self, storage, value):
-        if isinstance(storage, dict):
-            for key in storage:
-                self._assign_at_idx(storage[key], value[key])
-        else:
-            storage[self.idx] = value
-
-    def _store_attr(self, name, value):
-        value = nested_to_numpy(value)
-        if getattr(self, name) is None:
-            setattr(self, name, self._allocate_like(value))
-        self._assign_at_idx(getattr(self, name), value)
 
     def _set_sampling(self):
         self.sampling_seed += 1
@@ -63,13 +42,13 @@ class Buffer:
         if self.idx == self.capacity: 
             self.full, self.idx = True, 0
 
-        self._store_attr("obs", obs)
-        self._store_attr("action", action)
-        self._store_attr("reward", np.asarray(reward, dtype=np.float32))
-        self._store_attr("next_obs", next_obs)
-        self._store_attr("done", np.asarray(done, dtype=np.float32))
-        self._store_attr("state", state)
-        self._store_attr("next_state", next_state)
+        self.obs[self.idx] = obs
+        self.action[self.idx] = action
+        self.reward[self.idx] = reward
+        self.next_obs[self.idx] = next_obs
+        self.done[self.idx] = done
+        self.state[self.idx] = state
+        self.next_state[self.idx] = next_state
 
         self.idx += 1    
 
@@ -78,12 +57,12 @@ class Buffer:
 
         idxs = self.get_sample_idxs()
 
-        batch = {a: recursive_index_numpy(getattr(self, a), idxs) for a in self.attributes}
+        batch = {a: getattr(self, a)[idxs] for a in self.attributes}
 
         # Fix shapes for training
-        batch['action'] = add_trailing_dim(batch['action'])
-        batch['reward'] = add_trailing_dim(batch['reward'])
-        batch['done'] = add_trailing_dim(batch['done'])
+        batch['action'] = batch['action'][..., np.newaxis]
+        batch['reward'] = batch['reward'][..., np.newaxis]
+        batch['done'] = batch['done'][..., np.newaxis]
 
         return {k: self.to_torch(v) for k, v in batch.items()}
 

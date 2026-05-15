@@ -151,7 +151,7 @@ class MAPPO:
                         )
                     
                     if global_step % args.eval_freq == 0:
-                        evaluator.evaluate(global_step, actors)
+                        evaluator.evaluate(global_step, actors, eval_ep=getattr(args, "eval_episodes", 3))
                         if args.verbose: print(f"SPS={int(global_step / (time() - start_time))}", flush=True)
 
                     if (time() - start_time) / 60 >= args.time_limit:

@@ -1,4 +1,4 @@
-name: marl2grid
+name: marl2grid_test
 channels:
   - defaults
   - conda-forge

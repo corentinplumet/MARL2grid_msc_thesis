@@ -8,14 +8,7 @@ from .memory import Buffer
 from common.checkpoint import CheckpointSaver
 from common.imports import *
 from common.logger import Logger
-from common.utils import (
-    cast_np_to_tensors,
-    clone_nested,
-    get_joint_obs,
-    merge_namespaces,
-    set_nested_env_index,
-    strip_state_graph,
-)
+from common.utils import cast_np_to_tensors, stack_agent_obs_by_env
 from env.eval import Evaluator
 
 def linear_schedule(start_e: float, end_e: float, duration: int, t: int) -> float:
@@ -48,7 +41,7 @@ class QPLEX:
             ckpt (CheckpointSaver): The checkpoint handler for saving and loading training state.
         """
         # Load algorithm-specific arguments if not resuming from a checkpoint
-        if not ckpt.resumed: args = merge_namespaces(get_alg_args(), args)
+        if not ckpt.resumed: args = ap.Namespace(**vars(args), **vars(get_alg_args()))
 
         assert args.train_freq % args.n_envs == 0, \
             f"Invalid train frequency: {args.train_freq}. Must be multiple of n_envs {args.n_envs}"
@@ -75,11 +68,8 @@ class QPLEX:
         mixer_params = [len(agent_ids), state_dim, 
                             args.transf_embed_dim,
                             args.n_heads, args.mix_embed_dim,
-                            args.mix_embed_layers, args.is_minus_one, args.weighted_head,
-                            0, args.mixer_encoder,
-                            None if envs.graph_specs is None else envs.graph_specs["state"],
-                            args]
-        mixer, tg_mixer = [QPLEXMixer(*mixer_params).to(device) for _ in range(2)]
+                            args.mix_embed_layers, args.is_minus_one, args.weighted_head]
+        mixer, tg_mixer = [QPLEXMixer(*mixer_params) for _ in range(2)]
         tg_mixer.load_state_dict(mixer.state_dict())
 
         if ckpt.resumed: 
@@ -131,30 +121,29 @@ class QPLEX:
 
                 next_obs, rewards, terminations, truncations, infos = envs.step(action)
 
-                next_obs = cast_np_to_tensors(next_obs, device)
+                next_obs = cast_np_to_tensors(next_obs, device)      
                 dones = np.logical_or(terminations[agent_ids[0]], truncations[agent_ids[0]])
 
-                real_next_obs = clone_nested(next_obs)
+                real_next_obs = next_obs.copy()                    
                 for idx, done in enumerate(dones):
                     if done: 
-                        final_obs = cast_np_to_tensors(infos[idx]["final_observation"], device)
                         for agent in agent_ids:
-                            set_nested_env_index(real_next_obs[agent], idx, final_obs[agent])
+                            real_next_obs[agent][idx] = th.tensor(infos[idx]["final_observation"][agent]).to(device)
                     
-                state = get_joint_obs(obs, args.mixer_encoder, args.decentralized)
-                next_state = get_joint_obs(real_next_obs, args.mixer_encoder, args.decentralized)
+                state = stack_agent_obs_by_env(obs) if args.decentralized else obs['agent_0']
+                next_state = stack_agent_obs_by_env(real_next_obs) if args.decentralized else real_next_obs['agent_0']
                 for agent in agent_ids:
                     buffers[agent].store(
-                        strip_state_graph(obs[agent]),
+                        obs[agent],
                         action[agent],
                         rewards[agent],
-                        strip_state_graph(real_next_obs[agent]),
-                        dones,
+                        real_next_obs[agent],
+                        done,
                         state,
                         next_state
                     )
 
-                obs = clone_nested(next_obs)
+                obs = next_obs.copy()           
 
                 if global_step % args.eval_freq == 0:
                     evaluator.evaluate(global_step, qnets)
