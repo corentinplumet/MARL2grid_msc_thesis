@@ -69,6 +69,7 @@ class Evaluator:
             # Record rewards for plotting purposes
             if "episode" in info :   # Denote end of an episode
                 ep_survivals.append(self.env.g2op_ma_env._cent_env.nb_time_step/self.max_steps)
+                print(f"eval episode {len(ep_survivals)}/{eval_ep}, survival={ep_survivals[-1]*100:.3f}%", flush=True)
                 if not self.use_heuristic: ep_returns.append(ep_rewards)
                 obs, _ = self.env.reset()
                 obs = cast_np_to_tensors(obs, self.device)        
